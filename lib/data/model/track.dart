@@ -20,6 +20,10 @@ class Track {
   String? score;
   String? votes;
 
+  /// Сколько голосов не хватает до публичной оценки: NG прячет балл,
+  /// пока голосов меньше пяти («Waiting for N more votes»).
+  int? votesPending;
+
   /// `Listens` со страницы трека.
   String? listens;
 
@@ -60,6 +64,7 @@ class Track {
     this.mp3Url,
     this.score,
     this.votes,
+    this.votesPending,
     this.listens,
     this.downloads,
     this.faves,

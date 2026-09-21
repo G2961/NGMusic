@@ -64,5 +64,10 @@ class VoteResult {
   final int? votes;
   final bool waiting;
 
-  const VoteResult({this.score, this.votes, this.waiting = false});
+  /// Сколько голосов не хватает до публичной оценки
+  /// (из «Waiting for N more votes»), иначе null.
+  final int? pendingVotes;
+
+  const VoteResult(
+      {this.score, this.votes, this.waiting = false, this.pendingVotes});
 }

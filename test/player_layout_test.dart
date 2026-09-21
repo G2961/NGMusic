@@ -130,6 +130,51 @@ void main() {
     expect(timeRect.bottom, lessThanOrEqualTo(stageRect.bottom));
   });
 
+  testWidgets('NgVoteStars: драг даёт полузвёзды, тап по blam — ноль', (tester) async {
+    var voted = -1;
+    await tester.pumpWidget(MaterialApp(
+      theme: ngTheme,
+      home: Scaffold(
+        backgroundColor: ngBlack,
+        body: Center(
+          child: NgVoteStars(
+            voted: 7, // поставленный голос 3.5
+            onVote: (v) => voted = v,
+          ),
+        ),
+      ),
+    ));
+
+    expect(tester.takeException(), isNull);
+    final bar = find.byType(NgVoteStars);
+    expect(tester.getSize(bar).height, 41);
+
+    // Бар — единая область 230.75 шириной. Тап в конец первой звезды
+    // (46.15 из 230.75 = 20% → value 2) — голос 2 (одна звезда).
+    final rect = tester.getRect(bar);
+    // Blam-звезда слева (46.15 + зазор 2), бар начинается после неё.
+    final barX = rect.left + 46.15 + 2;
+    // Драг по бару: тыкаем в конец первой звезды (20% бара → value 2),
+    // ведём к трём с половиной звёздам (70% → 7) и отпускаем.
+    final g = await tester.startGesture(Offset(barX + 46.0, rect.center.dy));
+    await tester.pump();
+    await g.moveBy(const Offset(115.4, 0)); // 46.15 → 161.5 = 70% бара
+    await tester.pump();
+    await g.up();
+    await tester.pump();
+    expect(voted, 7);
+
+    // Одиночный тап без движения — тоже голосует (tap-путь).
+    await tester.tapAt(Offset(barX + 23.0, rect.center.dy)); // 10% → 1
+    await tester.pump();
+    expect(voted, 1);
+
+    // Тап по blam-звезде — голос 0.
+    await tester.tapAt(Offset(rect.left + 20, rect.center.dy));
+    await tester.pump();
+    expect(voted, 0);
+  });
+
   testWidgets('иконки трофеев режутся из спрайта', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(

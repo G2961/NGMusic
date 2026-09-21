@@ -919,6 +919,258 @@ class _WidthClipper extends CustomClipper<Rect> {
   bool shouldReclip(_WidthClipper old) => old.frac != frac;
 }
 
+// ── Votebar-звёзды (star-select-2) ──────────────────────────────────────
+
+/// Ряд оценки из votebar NG: blam-звезда (Vote 0) + бар 5 звёзд + Стив.
+/// Бар — ЕДИНАЯ жестовая область (аналог div.star-bar): пока палец
+/// зажат, звёзды до позиции красятся в hover-кадр (светлое кольцо),
+/// обрезанный по ширине N×10% — аналог label[value=N]::before из CSS.
+/// Отпускание отправляет голос; поставленный голос рисуется золотым.
+/// Спрайт star-select-2.webp (150×666 @2x): NG сжимает весь файл в тайл
+/// 46.15×204.92, кадры по 41: 0 hover, 1 idle, 2 checked, 3 битая,
+/// 4 blam-розовая. Стив — SteveReact4.webp, кадр = голос 0..10.
+class NgVoteStars extends StatefulWidget {
+  /// Поставленный голос в шкале NG 0..10 (полузвёзды); null — не голосовал.
+  final int? voted;
+  final bool enabled;
+
+  /// Отправка голоса (0..10) — на отпускании пальца или одиночном тапе.
+  final ValueChanged<int> onVote;
+
+  /// Живое превью (0..10) во время зажатия/драга; null — палец убрали.
+  final ValueChanged<int?>? onPreview;
+
+  const NgVoteStars({
+    super.key,
+    this.voted,
+    this.enabled = true,
+    required this.onVote,
+    this.onPreview,
+  });
+
+  @override
+  State<NgVoteStars> createState() => _NgVoteStarsState();
+}
+
+class _NgVoteStarsState extends State<NgVoteStars> {
+  static const _starW = 46.15, _starH = 41.0;
+  static const _barW = _starW * 5;
+
+  /// Превью во время зажатия/драга (null — палец не на баре).
+  int? _drag;
+
+  /// Зажата blam-звезда (превью голоса 0).
+  bool _zeroArmed = false;
+
+  /// NG-шкала: label[value=N] накрывает N×10% бара, значит позиция x
+  /// принадлежит значению ceil(x/W×10) — как CSS box model сайта.
+  int _valueAt(double dx) => ((dx / _barW) * 10).ceil().clamp(1, 10);
+
+  void _preview(int? v) {
+    setState(() => _drag = v);
+    widget.onPreview?.call(v);
+  }
+
+  Widget _barLayer(int frame) => Row(
+        children: [for (var i = 0; i < 5; i++) _VoteStarTile(frame: frame)],
+      );
+
+  /// Слой бара, обрезанный до value/10 ширины и прижатый влево —
+  /// аналог label::before с width: N*10% поверх общего фона.
+  Widget _clippedLayer(int value, int frame) => Positioned(
+        top: 0,
+        bottom: 0,
+        left: 0,
+        width: _barW * value / 10,
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.centerLeft,
+            minWidth: _barW,
+            maxWidth: _barW,
+            minHeight: _starH,
+            maxHeight: _starH,
+            child: _barLayer(frame),
+          ),
+        ),
+      );
+
+  void _submit() {
+    final v = _drag;
+    _preview(null);
+    if (v != null) widget.onVote(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final voted = widget.voted?.clamp(0, 10) ?? 0;
+    final preview = _drag;
+    final enabled = widget.enabled;
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: SizedBox(
+        height: _starH,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // «0 звёзд» — битая: серая (кадр 3); при зажатии или
+            // поставленном голосе 0 — розовая (кадр 4).
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown:
+                  enabled ? (_) => setState(() => _zeroArmed = true) : null,
+              onTapCancel:
+                  enabled ? () => setState(() => _zeroArmed = false) : null,
+              onTap: enabled
+                  ? () {
+                      setState(() => _zeroArmed = false);
+                      widget.onVote(0);
+                    }
+                  : null,
+              child: SizedBox(
+                width: _starW,
+                height: _starH,
+                child: Stack(children: [
+                  Positioned.fill(child: _VoteStarTile(frame: 3)),
+                  if (_zeroArmed ||
+                      widget.voted == 0 ||
+                      (widget.voted != null && voted == 0 && preview == null))
+                    Positioned.fill(child: _VoteStarTile(frame: 4)),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 2),
+            // Бар: одна область на 5 звёзд; фон idle, поверх — голос
+            // (золото) и живое превью (кольцо), оба клипом по ширине.
+            // Сырые указатели через Listener (вне арены жестов):
+            // и стоячий тап, и драг дают одинаковый поток событий,
+            // как на сайте — где label ловит и click, и hover.
+            Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: enabled
+                  ? (e) => _preview(_valueAt(e.localPosition.dx))
+                  : null,
+              onPointerMove: enabled
+                  ? (e) => _preview(_valueAt(e.localPosition.dx))
+                  : null,
+              onPointerUp: enabled ? (_) => _submit() : null,
+              onPointerCancel: enabled ? (_) => _preview(null) : null,
+              // Поглощаем вертикальный драг: иначе страница скроллится,
+              // пока ведёшь пальцем по звёздам (Listener вне арены и сам
+              // её не блокирует). Заглушки нужны именно как распознаватель.
+              child: GestureDetector(
+                onVerticalDragStart: enabled ? (_) {} : null,
+                onVerticalDragUpdate: enabled ? (_) {} : null,
+                onVerticalDragEnd: enabled ? (_) {} : null,
+                child: SizedBox(
+                  width: _barW,
+                  height: _starH,
+                  child: Stack(children: [
+                    Positioned.fill(child: _barLayer(1)), // idle-фон
+                    if (voted > 0) _clippedLayer(voted, 2), // checked
+                    if (preview != null) _clippedLayer(preview, 0), // hover
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Реакция Стива: кадр = текущее значение (превью главнее).
+            _SteveReact(frame: (preview ?? voted).clamp(0, 10)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Звезда votebar из star-select-2: весь файл (150×666 @2x) сжимается
+/// в тайл 46.15×204.92 (как background-size NG), кадр = 41px по вертикали.
+class _VoteStarTile extends StatelessWidget {
+  final int frame;
+  const _VoteStarTile({required this.frame});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SpriteCrop(
+      asset: NgTex.starSelect2024,
+      fileW: 150,
+      fileH: 666,
+      tileW: 46.15,
+      tileH: 204.92,
+      sliceY: frame * 41.0,
+      frameH: 41,
+    );
+  }
+}
+
+/// Реакция Стива: файл 210×2035 @2x сжат до 45.4×440, кадры по 40 —
+/// кадр N (0..10) = y N×40.
+class _SteveReact extends StatelessWidget {
+  final int frame;
+  const _SteveReact({required this.frame});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SpriteCrop(
+      asset: NgTex.steveReact2024,
+      fileW: 210,
+      fileH: 2035,
+      tileW: 45.4054,
+      tileH: 440,
+      sliceY: frame.clamp(0, 10) * 40.0,
+      frameH: 40,
+    );
+  }
+}
+
+/// Вырезка кадра из спрайта с масштабированием файла в CSS-тайл
+/// (как background-size у NG): файл fileW×fileH сжат до tileW×tileH,
+/// показан кадр высотой frameH с отступом sliceY сверху. Виджет —
+/// tileW×frameH.
+class _SpriteCrop extends StatelessWidget {
+  final String asset;
+  final double fileW, fileH;
+  final double tileW, tileH;
+  final double sliceY;
+  final double frameH;
+
+  const _SpriteCrop({
+    required this.asset,
+    required this.fileW,
+    required this.fileH,
+    required this.tileW,
+    required this.tileH,
+    required this.sliceY,
+    required this.frameH,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: SizedBox(
+        width: tileW,
+        height: frameH,
+        child: OverflowBox(
+          minWidth: 0,
+          minHeight: 0,
+          maxWidth: tileW,
+          maxHeight: tileH,
+          // Окно прижато к нужному кадру: -1 = верх тайла, 1 = низ.
+          alignment: Alignment(
+              0, tileH <= frameH ? 0 : sliceY / (tileH - frameH) * 2 - 1),
+          child: Image.asset(
+            asset,
+            width: tileW,
+            height: tileH,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.medium,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Полосатый прогресс-бар плеера ─────────────────────────────────────────────
 
 /// `.ngp-seek-fill { repeating-linear-gradient(45deg,#fc0 0,#fc0 8px,#111 8px,#111 16px) }`

@@ -257,24 +257,23 @@ class NgRepository {
 
   /// Разбирает кнопку `favefollow` (избранное трека / подписка на автора).
   ///
-  /// Разметка (проверена запросами к живому NG):
+  /// Старая разметка (до 2026) — инлайн-скрипт:
   /// ```html
-  /// <span class="favefollow-buttons active" id="ffr_…_1">
-  ///   <span class="favefollow-add">…Add To Favorites…</span>
-  ///   <span class="favefollow-remove">…Favorited!…</span>
-  /// </span>
+  /// <span class="favefollow-buttons active" id="ffr_…_1">…</span>
   /// <script>
   ///   ngutils.initFavoriteButton("#ffr_…_1", "<userkey>", "ff-h-i-lFhE");
   /// </script>
   /// ```
+  /// Новая (2026) — скрипта нет: ключ = id без префикса, userkey = глобальный
+  /// `uek`, тип кнопки определяем по содержимому (`fave-item` vs `follow-user`).
+  ///
   /// В HTML всегда есть ОБА состояния, видимое переключает CSS по классу
   /// `active` на обёртке. Поэтому «уже в избранном / уже подписан» — это
   /// `active` у обёртки, а не наличие `.following-user` или
   /// `.favefollow-remove` в DOM: они есть всегда, и проверка по ним врала
   /// (из-за этого статус подписки «прыгал» на Подписан).
   ///
-  /// Второй аргумент `init…Button` — `userkey`; без него POST отвечает 400
-  /// `{"errors":["Illegal communication attempt detected…"]}`.
+  /// Без `userkey` POST отвечает 400 Illegal communication attempt.
   ///
   /// Публичный, чтобы проверяться тестом без сети.
   NgFaveButton? parseFaveButton(String html, String initFn) {
@@ -282,23 +281,70 @@ class NgRepository {
       'ngutils\\.$initFn\\(\\s*["\']#([^"\']+)["\']\\s*,'
       '\\s*["\']([^"\']*)["\']\\s*,\\s*["\']([^"\']+)["\']\\s*\\)',
     ).firstMatch(html);
-    if (init == null) return null;
+    if (init != null) {
+      final domId = init.group(1)!;
+      final wrapper = RegExp(
+        '<span class="favefollow-buttons([^"]*)" id="${RegExp.escape(domId)}"',
+      ).firstMatch(html);
 
-    final domId = init.group(1)!;
+      return NgFaveButton(
+        key: init.group(3)!,
+        userkey: init.group(2)!,
+        active: wrapper?.group(1)!.contains('active'),
+      );
+    }
+
+    // Новый формат (2026): инлайн-скрипта нет — кнопка самодостаточна:
+    // <span class="favefollow-buttons[ active]" id="ffr_ffr_…_1">
+    //   <a data-action="add" class="fave-item">…</a>
+    // Ключ кнопки — id без префикса «ffr_», userkey — глобальный uek
+    // (jQuery сам подставляет его в POST: `r.data.userkey=O.get('uek')`).
     final wrapper = RegExp(
-      '<span class="favefollow-buttons([^"]*)" id="${RegExp.escape(domId)}"',
+      r'<span class="favefollow-buttons([^"]*)" id="(ffr_([^"]+))"',
     ).firstMatch(html);
+    if (wrapper == null) return null;
+
+    final block = _blockAround(html, wrapper.group(2)!);
+    final isFavoriteKind = block.contains('fave-item') ||
+        block.contains('Add To Favorites');
+    final isFollowKind =
+        block.contains('follow-user') || block.contains('FOLLOW');
+    // initFn задаёт тип: initFavoriteButton — избранное, initFollowButton —
+    // подписка; на странице бывают обе кнопки, выбираем свою.
+    final want = initFn == 'initFavoriteButton' ? isFavoriteKind : isFollowKind;
+    if (!want) return null;
+
+    final uek =
+        RegExp(r"PHP\.set\('uek',\s*'([^']*)'\)").firstMatch(html)?.group(1) ??
+            RegExp(r'name="userkey" value="([^"]+)"')
+                .firstMatch(html)
+                ?.group(1) ??
+            '';
 
     return NgFaveButton(
-      key: init.group(3)!,
-      userkey: init.group(2)!,
-      active: wrapper?.group(1)!.contains('active'),
+      key: wrapper.group(3)!, // id без ffr_-префикса
+      userkey: uek,
+      active: wrapper.group(1)!.contains('active'),
     );
+  }
+
+  /// Кусок HTML вокруг [marker] — от 300 символов до маркера до 700 после:
+  /// достаточно, чтобы увидеть содержимое кнопки (add/remove-ссылки).
+  String _blockAround(String html, String marker) {
+    final i = html.indexOf(marker);
+    if (i < 0) return '';
+    final from = i - 300 < 0 ? 0 : i - 300;
+    final to = i + 700 < html.length ? i + 700 : html.length;
+    return html.substring(from, to);
   }
 
   /// POST в `/favorites/{type}/{add|remove}/{button_key}` с обязательным
   /// `userkey` в теле. Возвращает подтверждённое состояние из ответа
-  /// (`{"fave_type":…,"active":true,…}`) или null, если NG отказал.
+  /// или null, если NG отказал.
+  ///
+  /// Публичный парсер ответа — [parseFaveResponse]: сайт в success-колбэке
+  /// читает из JSON только `count_key`/`fave_type`, поля `active` может не
+  /// быть — тогда успехом считаем запрошенное состояние.
   Future<bool?> _postFave({
     required String origin,
     required String type,
@@ -306,6 +352,8 @@ class NgRepository {
     required NgFaveButton button,
     required String cookie,
     required String referer,
+    String? ngDesign,
+    String? csrfToken,
   }) async {
     final url =
         '$origin/favorites/$type/${add ? 'add' : 'remove'}/${button.key}';
@@ -317,11 +365,20 @@ class NgRepository {
               'User-Agent': _userAgent,
               'Cookie': cookie,
               'X-Requested-With': 'XMLHttpRequest',
+              // Без CSRF-токена из <meta> NG отвечает HTML-редиректом
+              // `{"url":"…/favorites"}` — избранное не ставится.
+              if (csrfToken != null && csrfToken.isNotEmpty)
+                'X-CSRF-TOKEN': csrfToken,
               'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
               'Accept': 'application/json, text/javascript, */*; q=0.01',
               'Referer': referer,
+              // Браузер всегда шлёт Origin на POST — NG может валидировать
+              // его вместе с CSRF.
+              'Origin': origin,
             },
-            body: 'userkey=${Uri.encodeQueryComponent(button.userkey)}',
+            body: 'userkey=${Uri.encodeQueryComponent(button.userkey)}'
+                // Как в JS сайта: аккаунтам с новым дизайном нужен этот флаг.
+                '${ngDesign != null ? '&___ng_design=${Uri.encodeQueryComponent(ngDesign)}' : ''}',
           )
           .timeout(const Duration(seconds: 15));
 
@@ -329,52 +386,134 @@ class NgRepository {
         debugPrint('[ng] $url -> ${response.statusCode} ${response.body}');
         return null;
       }
-      final json = jsonDecode(response.body);
-      if (json is! Map) return null;
-      final active = json['active'];
-      if (active is! bool) {
-        debugPrint('[ng] $url -> без поля active: ${response.body}');
-        return null;
-      }
-      return active;
+      debugPrint('[ng] fave POST -> 200, тело: ${response.body.length > 400
+          ? response.body.substring(0, 400)
+          : response.body}');
+      return parseFaveResponse(response.body, add);
     } catch (e) {
       debugPrint('[ng] $url failed: $e');
       return null;
     }
   }
 
+  /// Разбор ответа fave-запроса. Явные ошибки (`errors`) — отказ; поле
+  /// `active` опционально: если его нет, считаем, что NG принял запрос.
+  /// Публичный ради теста без сети.
+  bool? parseFaveResponse(String body, bool requested) {
+    try {
+      final json = jsonDecode(body);
+      if (json is! Map) return null;
+      if (json['errors'] != null || json['error'] != null) {
+        debugPrint('[ng] fave отклонён: $body');
+        return null;
+      }
+      final active = json['active'];
+      if (active is bool) return active;
+      return requested;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Кнопка избранного для трека. На авторизованной странице трека скрипта
+  /// `initFavoriteButton` больше нет: NG подтягивает кнопки отдельным
+  /// компонентом `/projects/audio/{projectId}/load-component/users`
+  /// (projectId ≠ id трека, берём из страницы). Гостю компонент отдаёт 302,
+  /// поэтому сначала пробуем страницу, потом компонент.
+  Future<NgFaveButton?> _favoriteButton(
+      String trackId, String cookie, String pageHtml) async {
+    final direct = parseFaveButton(pageHtml, 'initFavoriteButton');
+    if (direct != null) {
+      debugPrint('[ng] fav-кнопка найдена прямо на странице трека');
+      return direct;
+    }
+
+    final pid = RegExp(r'projects/audio/(\d+)/load-component/users')
+            .firstMatch(pageHtml)
+            ?.group(1) ??
+        RegExp(r'data-users-and-credits-for="(\d+)"')
+            .firstMatch(pageHtml)
+            ?.group(1);
+    debugPrint('[ng] fav: кнопки на странице нет (projectId=$pid)');
+    if (pid == null) return null;
+    try {
+      final comp = await _connectRawAuth(
+          '$_baseUrl/projects/audio/$pid/load-component/users', cookie);
+      debugPrint('[ng] fav: компонент ${comp.length} байт, '
+          'initFavoriteButton есть: ${comp.contains('initFavoriteButton')}, '
+          'favefollow: ${comp.contains('favefollow')}');
+      final button = parseFaveButton(comp, 'initFavoriteButton');
+      if (button == null) {
+        debugPrint('[ng] fav: parse не сработал, '
+            'фрагмент: ${comp.substring(0, comp.length < 400 ? comp.length : 400)}');
+      }
+      return button;
+    } catch (e) {
+      debugPrint('[ng] fav: компонент не скачался: $e');
+      return null;
+    }
+  }
+
   /// Переключает избранное на NG и возвращает подтверждённое состояние.
-  /// null — не удалось: нет сессии, на странице нет кнопки (значит, куки
-  /// не авторизованы) или NG отклонил запрос.
+  /// null — не удалось (нет сессии или NG отклонил).
+  ///
+  /// Новый эндпоинт 2026 (проверен перехватом в DevTools):
+  /// `POST /favorites/audio/{trackId}/favorite` — без ключа кнопки,
+  /// добавление шлёт тело `___ng_design=2015`, снятие — пустое.
+  /// Ответ: `{"active":bool,"fave_type":"favorite",...}`.
   Future<bool?> setFavorite(String trackId, bool add) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
 
     final pageUrl = '$_baseUrl/audio/listen/$trackId';
     try {
-      final button =
-          parseFaveButton(await _connectRawAuth(pageUrl, cookie), 'initFavoriteButton');
+      // Текущее состояние — чтобы не togglenуть лишний раз (POST всегда
+      // переключает, а не ставит).
+      final html = await _connectRawAuth(pageUrl, cookie);
+      final button = await _favoriteButton(trackId, cookie, html);
       if (button == null) {
         debugPrint('[ng] кнопки избранного нет на $pageUrl — '
             'скорее всего, сессия не авторизована');
         return null;
       }
-      // Уже в нужном состоянии — второй POST NG считает переключением.
       if (button.active == add) return add;
 
-      return _postFave(
-        origin: _baseUrl,
-        type: 'favorite',
-        add: add,
-        button: button,
-        cookie: cookie,
-        referer: pageUrl,
-      );
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/favorites/audio/$trackId/favorite'),
+            headers: {
+              'User-Agent': _userAgent,
+              'Cookie': cookie,
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-CSRF-TOKEN': _csrfFrom(html) ?? '',
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'Accept': 'application/json, text/javascript, */*; q=0.01',
+              'Referer': pageUrl,
+              'Origin': _baseUrl,
+            },
+            body: add ? '___ng_design=2015' : '',
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        debugPrint('[ng] favorite POST -> ${response.statusCode} '
+            '${response.body}');
+        return null;
+      }
+      debugPrint('[ng] favorite POST -> 200 ${response.body}');
+      return parseFaveResponse(response.body, add);
     } catch (e) {
       debugPrint('[ng] setFavorite($trackId, $add) failed: $e');
       return null;
     }
   }
+
+  /// CSRF-токен из `<meta name="csrf-token">` — jQuery NG вставляет его
+  /// в каждый AJAX-запрос заголовком `X-CSRF-TOKEN`.
+  String? _csrfFrom(String html) =>
+      RegExp(r'<meta name="csrf-token" content="([^"]+)"')
+          .firstMatch(html)
+          ?.group(1);
 
   /// В избранном ли трек на NG (null — определить не удалось).
   Future<bool?> getFavoriteStatus(String trackId) async {
@@ -383,7 +522,8 @@ class NgRepository {
     try {
       final html =
           await _connectRawAuth('$_baseUrl/audio/listen/$trackId', cookie);
-      return parseFaveButton(html, 'initFavoriteButton')?.active;
+      final button = await _favoriteButton(trackId, cookie, html);
+      return button?.active;
     } catch (_) {
       return null;
     }
@@ -423,6 +563,7 @@ class NgRepository {
         button: button,
         cookie: cookie,
         referer: '$origin/',
+        csrfToken: _csrfFrom(page.body),
       );
     } catch (e) {
       debugPrint('[ng] setFollow($artistUsername, $add) failed: $e');
@@ -636,10 +777,14 @@ class NgRepository {
           RegExp(r'id="score_number"[^>]*>([\d.]+)<').firstMatch(side);
       final votes =
           RegExp(r'<dt>Votes</dt>\s*<dd>([\d,]+)<').firstMatch(side);
+      // «Waiting for N more votes» — сколько не хватает до публичного балла.
+      final waitingM = RegExp(r'Waiting for (\d+) more').firstMatch(side);
       return VoteResult(
         score: double.tryParse(score?.group(1) ?? ''),
         votes: votes == null ? null : int.tryParse(votes.group(1)!.replaceAll(',', '')),
-        waiting: side.contains('Waiting for'),
+        waiting: waitingM != null,
+        pendingVotes:
+            waitingM == null ? null : int.tryParse(waitingM.group(1)!),
       );
     } catch (_) {
       return null;
@@ -1380,8 +1525,18 @@ class NgRepository {
             case 'votes':
               track.votes = value;
             case 'score':
-              final m = RegExp(r'([\d.]+)').firstMatch(value);
-              if (m != null) track.score = m.group(1);
+              // Когда голосов меньше пяти, NG вместо балла пишет
+              // «Waiting for N more votes» — честно сохраняем остаток,
+              // чтобы UI не показывал фейковую оценку.
+              final waiting = RegExp(r'Waiting for (\d+) more')
+                  .firstMatch(value);
+              if (waiting != null) {
+                track.votesPending = int.parse(waiting.group(1)!);
+                track.score = null;
+              } else {
+                final m = RegExp(r'([\d.]+)').firstMatch(value);
+                if (m != null) track.score = m.group(1);
+              }
             case 'uploaded':
               // «May 27, 2026 7:10 PM EDT» — время не нужно
               final m =

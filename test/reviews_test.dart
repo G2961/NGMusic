@@ -79,6 +79,7 @@ void main() {
     expect(res2, isNotNull);
     expect(res2!.waiting, isTrue);
     expect(res2.score, isNull);
+    expect(res2.pendingVotes, 4);
 
     // Без sidestats — не ошибка, просто сказать нечего.
     expect(repo.parseVoteResponsePublic('{"success":false}'), isNull);

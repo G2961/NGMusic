@@ -429,7 +429,13 @@ class _DetailsSection extends StatelessWidget {
           const NgHr(margin: EdgeInsets.symmetric(vertical: 6)),
           Row(
             children: [
-              if (score > 0)
+              if (track.votesPending != null)
+                Text(
+                  'Waiting for ${track.votesPending} more '
+                  'vote${track.votesPending == 1 ? '' : 's'}',
+                  style: ngLabel,
+                )
+              else if (score > 0)
                 NgStars(score: score)
               else
                 const Text('Not rated yet', style: ngLabel),
@@ -657,9 +663,12 @@ class _CreditsPod extends StatelessWidget {
                 ),
                 _CreditRow(
                   label: 'Score',
-                  value: score > 0
-                      ? '${score.toStringAsFixed(2)} / 5.00'
-                      : 'Not rated',
+                  value: t.votesPending != null
+                      ? 'Waiting for ${t.votesPending} more '
+                          'vote${t.votesPending == 1 ? '' : 's'}'
+                      : score > 0
+                          ? '${score.toStringAsFixed(2)} / 5.00'
+                          : 'Not rated',
                 ),
                 if (t.votes != null)
                   _CreditRow(label: 'Votes', value: t.votes!),
@@ -1156,25 +1165,30 @@ class _VoteBar extends StatefulWidget {
 class _VoteBarState extends State<_VoteBar> {
   static final _repo = NgRepository();
 
-  int _voted = 0; // голос в шкале NG 0..10
-  bool _hasVote = false; // голос реально стоит (иначе нулевая серая)
+  /// Голос в шкале NG 0..10; null — ещё не голосовал (серые звёзды).
+  int? _voted;
   bool _busy = false;
   String? _note;
+
+  /// Превью-оценка во время зажатия/драга (0..10) — видна в шапке.
+  int? _preview;
+
+  /// «4.5» из голоса NG 0..10 — как сайт пишет в «You voted N!».
+  static String _stars(int v) =>
+      (v / 2).toStringAsFixed(v.isOdd ? 1 : 0);
 
   @override
   void initState() {
     super.initState();
     // savedVote — уже в шкале NG 0..10 (полузвёзды).
-    _hasVote = widget.savedVote != null;
-    _voted = widget.savedVote ?? 0;
+    _voted = widget.savedVote;
   }
 
   @override
   void didUpdateWidget(_VoteBar old) {
     super.didUpdateWidget(old);
     if (widget.savedVote != old.savedVote) {
-      _hasVote = widget.savedVote != null;
-      _voted = widget.savedVote ?? 0;
+      _voted = widget.savedVote;
     }
   }
 
@@ -1187,20 +1201,25 @@ class _VoteBarState extends State<_VoteBar> {
     setState(() {
       _busy = true;
       _note = null;
+      // Сразу показываем, чем голосуем — до ответа NG.
+      _preview = value;
     });
     // voteTrack ждёт голос в шкале NG 0..10 (полузвёзды).
     final res = await _repo.voteTrack(widget.trackId, value);
     if (!mounted) return;
     setState(() {
       _busy = false;
+      _preview = null;
       if (res == null) {
         _note = 'Vote failed — try again';
       } else {
         _voted = value;
-        _hasVote = true;
         _note = res.waiting
-            ? 'Waiting for more votes…'
-            : 'You voted ${(value / 2).toStringAsFixed(value.isOdd ? 1 : 0)}!';
+            ? (res.pendingVotes != null
+                ? 'Waiting for ${res.pendingVotes} more '
+                    'vote${res.pendingVotes == 1 ? '' : 's'}…'
+                : 'Waiting for more votes…')
+            : 'You voted ${_stars(value)}!';
         // Наверх — голос в шкале NG 0..10, без округлений, иначе
         // didUpdateWidget перерисует полузвёзды как целые звёзды.
         widget.onVoted(value);
@@ -1221,16 +1240,19 @@ class _VoteBarState extends State<_VoteBar> {
         children: [
           Text(
             _busy
-                ? 'Voting…'
-                : _note ??
-                    (_voted > 0
-                        ? 'You Rated This ${(_voted / 2).toStringAsFixed(_voted.isOdd ? 1 : 0)}/5'
-                        : 'RATE THIS SUBMISSION!'),
+                ? 'Voting ${_stars(_preview ?? 0)}…'
+                : _preview != null
+                    ? _stars(_preview!)
+                    : _note ??
+                        (_voted != null && _voted! > 0
+                            ? 'You Rated This ${_stars(_voted!)}/5'
+                            : 'RATE THIS SUBMISSION!'),
             style: TextStyle(
               fontFamily: ngHeaderFont,
               fontSize: 16,
-              color:
-                  (_note != null || _voted > 0) && !_busy ? ngGold : ngWhite,
+              color: (_note != null || (_voted != null && _voted! > 0)) && !_busy
+                  ? ngGold
+                  : ngWhite,
               shadows: const [Shadow(color: ngBlack, offset: Offset(0, 1))],
             ),
           ),
@@ -1243,11 +1265,14 @@ class _VoteBarState extends State<_VoteBar> {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 6),
-          _VoteStarRow(
-            selected: _voted,
-            hasVote: _hasVote,
+          // Во время отправки бар показывает именно ту оценку, что уходит
+          // в NG (_preview зафиксирован в момент отпускания пальца), а не
+          // старую — иначе при смене 5 → 4 звёзды «не доезжают».
+          NgVoteStars(
+            voted: _busy && _preview != null ? _preview : _voted,
             enabled: !_busy,
-            onSelect: (v) => _vote(v, vm),
+            onVote: (v) => _vote(v, vm),
+            onPreview: (v) => setState(() => _preview = v),
           ),
         ],
       ),
@@ -1255,239 +1280,6 @@ class _VoteBarState extends State<_VoteBar> {
   }
 }
 
-/// Ряд оценки: blam-звезда + бар 5 звёзд (полузвёздные тап-зоны) + Стив.
-/// [selected] — голос в шкале 0..10 (полузвёзды). Тап по полузвезде N
-/// даёт округлённые вверх звёзды (нечётный 7 → 4 звезды = 8 голос NG —
-/// на NG-клиенте так же: label[value=7] накрывает 70% бара).
-class _VoteStarRow extends StatelessWidget {
-  final int selected; // 0..10 полузвёзд
-
-  /// Голос реально стоит: иначе нулевая звезда — серая, не розовая.
-  final bool hasVote;
-  final bool enabled;
-  final ValueChanged<int> onSelect; // 0..10 (0 — нулевая звезда)
-
-  const _VoteStarRow({
-    required this.selected,
-    required this.hasVote,
-    required this.onSelect,
-    this.enabled = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: SizedBox(
-        height: 41,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // «0 звёзд» — битая звезда: серый контур (кадр 3); розовый
-            // (кадр 4) — только когда реально стоит голос 0. Размер —
-            // как у звёзд бара, иначе кадр обрезается сверху.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: enabled ? () => onSelect(0) : null,
-              child: SizedBox(
-                width: 46.15,
-                height: 41,
-                child: Stack(children: [
-                  Positioned.fill(
-                    child: _StarTile(frame: 3),
-                  ),
-                  if (hasVote && selected == 0)
-                    Positioned.fill(
-                      child: _StarTile(frame: 4),
-                    ),
-                ]),
-              ),
-            ),
-            const SizedBox(width: 2),
-            // Бар: 5 звёзд по 46.15×41, каждая — две тап-зоны.
-            for (var s = 0; s < 5; s++)
-              SizedBox(
-                width: 46.15,
-                height: 41,
-                child: Row(children: [
-                  // Левая полузвезда: голос 2s+1 (залив ≥ 2s+1).
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: enabled ? () => onSelect(s * 2 + 1) : null,
-                    child: _HalfStar(
-                        left: true, gold: selected >= s * 2 + 1),
-                  ),
-                  // Правая: голос 2s+2.
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: enabled ? () => onSelect(s * 2 + 2) : null,
-                    child: _HalfStar(
-                        left: false, gold: selected >= s * 2 + 2),
-                  ),
-                ]),
-              ),
-            const SizedBox(width: 6),
-            // Реакция Стива: кадр = голос (0..10).
-            _SteveReact(frame: selected.clamp(0, 10)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Звезда из спрайта star-select-2. NG (CSS) сжимает ВЕСЬ файл
-/// (150×666 @2x) в тайл 46.15×204.92 CSS-px; кадр = 41px.
-/// Кадры: 0 hover, 1 idle (контур в круге), 2 checked (золотая),
-/// 3 idle2 (битая — «0 звёзд»), 4 blam (розовая).
-/// [w]×[h] — размер звезды (бар 46.15×41, blam 41.5×36).
-class _StarTile extends StatelessWidget {
-  final int frame;
-  final double w;
-  final double h;
-
-  const _StarTile({required this.frame, this.w = 46.15, this.h = 41});
-
-  @override
-  Widget build(BuildContext context) {
-    // Весь файл сжимается в тайл (как background-size у NG) — окно
-    // по ширине = весь тайл, иначе круг-обводка звезды срезается.
-    return _SpriteSlice(
-      asset: NgTex.starSelect2024,
-      fileW: 150,
-      fileH: 666,
-      tileW: 46.15,
-      tileH: 204.92,
-      sliceX: 0,
-      sliceY: frame * 41.0,
-      sliceW: 46.15,
-      sliceH: 41,
-      viewW: w,
-      viewH: h,
-    );
-  }
-}
-
-/// Половина звезды бара: левая или правая половина кадра.
-/// Половина звезды бара: окно 23px с клипом; через OverflowBox показывает
-/// левую или правую половину целой звезды (46.15).
-/// Золотая (checked), если за эту полузвезду проголосовано, иначе контур.
-class _HalfStar extends StatelessWidget {
-  final bool left;
-  final bool gold;
-
-  const _HalfStar({required this.left, required this.gold});
-
-  @override
-  Widget build(BuildContext context) {
-    // Как в CSS NG: бар всегда залит idle-тайлом (серый круг + контур),
-    // а золотая звезда кладётся ПОВЕРХ — круг остаётся виден по краям.
-    Widget layer(int frame) => _StarTile(frame: frame);
-    return ClipRect(
-      child: SizedBox(
-        width: 46.15 / 2,
-        height: 41,
-        child: OverflowBox(
-          alignment: left ? Alignment.centerLeft : Alignment.centerRight,
-          minWidth: 0,
-          minHeight: 0,
-          maxWidth: 46.15,
-          maxHeight: 41,
-          child: Stack(children: [
-            layer(1), // idle: круг + серый контур — всегда
-            if (gold) layer(2), // checked: золотая поверх
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-/// Реакция Стива (мобильный эталон): 45.4×40, спрайт SteveReact4
-/// (файл 210×2035 @2x = 105×1017.5 CSS), 11 кадров по 40, кадр N = y N×40.
-/// NG рисует фон «45.4054px 440px» — файл сжат до 105 CSS-ширины... нет:
-/// background-size 45.4054px 440px — ширина = ширине иконки, т.е. файл
-/// сжат ПО ГОРИЗОНТАЛИ с 105 до 45.4?! Тогда лица сплющены — на живом NG
-/// пропорции нормальные, значит фон = 105×440÷... Сверим: 2035/2 = 1017.5
-/// CSS при ширине файла 105. NG задаёт 45.4×440 — ровно 0.4324 масштаба.
-/// 1017.5 × 0.4324 = 440 ✓. Т.е. файл сжат до 45.4×440, кадры по 40.
-class _SteveReact extends StatelessWidget {
-  final int frame; // 0..10
-  const _SteveReact({required this.frame});
-
-  @override
-  Widget build(BuildContext context) {
-    return _SpriteSlice(
-      asset: NgTex.steveReact2024,
-      fileW: 210,
-      fileH: 2035,
-      tileW: 45.4054,
-      tileH: 440,
-      sliceX: 0,
-      sliceY: frame.clamp(0, 10) * 40.0,
-      sliceW: 45.4054,
-      sliceH: 40,
-      viewW: 45.4,
-      viewH: 40,
-    );
-  }
-}
-
-/// Вырезка из спрайта с масштабированием файла в CSS-тайл (как background-size
-/// у NG). Файл (fileW×fileH файловых px) рисуется сжатым до tileW×tileH
-/// CSS-px; из него показывается область (sliceX, sliceY, sliceW×sliceH);
-/// виджет — viewW×viewH (по умолчанию = slice).
-class _SpriteSlice extends StatelessWidget {
-  final String asset;
-  final double fileW, fileH;
-  final double tileW, tileH;
-  final double sliceX, sliceY, sliceW, sliceH;
-  final double? viewW, viewH;
-
-  const _SpriteSlice({
-    required this.asset,
-    required this.fileW,
-    required this.fileH,
-    required this.tileW,
-    required this.tileH,
-    required this.sliceX,
-    required this.sliceY,
-    required this.sliceW,
-    required this.sliceH,
-    this.viewW,
-    this.viewH,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Множитель файловых → CSS-пикселей.
-    final kx = tileW / fileW;
-    final ky = tileH / fileH;
-    return ClipRect(
-      child: SizedBox(
-        width: viewW ?? sliceW,
-        height: viewH ?? sliceH,
-        child: OverflowBox(
-          minWidth: 0,
-          minHeight: 0,
-          maxWidth: tileW,
-          maxHeight: tileH,
-          alignment: Alignment(
-            tileW <= sliceW ? 0 : (sliceX / (tileW - sliceW)) * 2 - 1,
-            tileH <= sliceH ? 0 : (sliceY / (tileH - sliceH)) * 2 - 1,
-          ),
-          child: Image.asset(
-            asset,
-            width: tileW,
-            height: tileH,
-            fit: BoxFit.fill,
-            filterQuality: FilterQuality.medium,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Карточка ЧУЖОГО отзыва как на NG 2015: шапка (круглый аватар, ник
 /// оранжевым, флажок-жалоба, звёзды справа), текст, низ с «React» и
