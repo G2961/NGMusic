@@ -1,32 +1,29 @@
-# NGMusic Flutter
+# NGMusic
 
-Полный порт Kotlin/Jetpack Compose → Flutter/Dart.
+Мобильный плеер для [Newgrounds Audio Portal](https://www.newgrounds.com/audio) — неофициальный клиент с ретро-дизайном в духе классического NG (панели 2015, votebar со Стивом и спрайтами 2024).
 
-## Что сохранено 1:1
+## Что умеет
 
-| Kotlin | Flutter |
-|---|---|
-| `NgRepository` (jsoup) | `NgRepository` (html package) |
-| Парсинг `li[data-hub-id]` | Идентичный CSS-селектор |
-| Парсинг поиска `ul.itemlist li:has(.audio-wrapper)` | Идентичный |
-| `getMp3Url` (og:audio meta → buildAudioUrl) | Идентичный |
-| `getTrackStats` (score/votes/downloads) | Идентичный |
-| `loadMore()` с дедупликацией по ID | Идентичный |
-| `playNext()` → триггер `loadMore()` при конце списка | Идентичный |
-| NG-палитра (все hex-цвета) | Идентичный |
-| Infinity scroll (threshold = 4 от конца) | ScrollController listener |
-| User-Agent header | Идентичный |
+- **Каталог и поиск** — хабы (Featured, Best / Weekly / Daily / Monthly, Genres), поиск по трекам с подгрузкой страниц при скролле
+- **Плеер** — стриминг mp3, очередь, автопереход к следующему треку, мини-плеер, фоновое воспроизведение
+- **Оценки** — голосование 0–5 звёзд с шагом 0.5 (жестовая votebar как на сайте: превью-кольцо, полузвёзды, реакции Стива)
+- **Избранное и плейлисты** — добавление треков в избранное на аккаунте Newgrounds, локальные плейлисты
+- **Аккаунт** — вход в Newgrounds, просмотр своей библиотеки
+- **Артисты** — страницы исполнителей с их треками
+- **Скачивание** — загрузка mp3 на устройство
 
-## Замены
+Данные тянутся напрямую с newgrounds.com: HTML парсится локально, аудио стримится с CDN Newgrounds.
 
-| Kotlin/Android | Flutter |
-|---|---|
-| `media3-exoplayer` + `MediaSession` | `just_audio` + `audio_service` |
-| `coil` | `cached_network_image` |
-| `StateFlow` + `collectAsState()` | `ChangeNotifier` + `Provider` |
-| `DownloadManager` | `url_launcher` (открывает mp3 в браузере) |
+## Технологии
 
-## Сборка
+- Flutter / Dart, min SDK — Android 5.0 (API 21)
+- `http` + `html` — загрузка и парсинг страниц
+- `just_audio` + `audio_service` — воспроизведение и фоновый режим
+- `provider` — состояние (`ChangeNotifier`)
+- `sqflite` — локальная библиотека (история, плейлисты)
+- `webview_flutter` — вход в аккаунт Newgrounds
+
+## Сборка и запуск
 
 ```bash
 flutter pub get
@@ -34,24 +31,33 @@ flutter run                    # дев-режим
 flutter build apk --release   # релизный APK
 ```
 
-Минимальный SDK: **Android 5.0 (API 21)** — down от Kotlin-версии (API 24),
-потому что just_audio поддерживает API 21+.
+Тесты:
+
+```bash
+flutter test
+```
 
 ## Структура
 
 ```
 lib/
 ├── data/
-│   ├── model/track.dart          # Track data class
-│   └── repository/ng_repository.dart  # HTML парсинг (jsoup → html package)
+│   ├── model/track.dart               # Модель трека
+│   └── repository/ng_repository.dart  # Запросы и парсинг newgrounds.com
 ├── player/
-│   └── ng_audio_handler.dart     # just_audio + audio_service handler
+│   └── ng_audio_handler.dart          # Аудио-хендлep (just_audio + audio_service)
+├── services/
+│   └── track_downloader.dart          # Скачивание mp3
 ├── ui/
-│   ├── screens/
-│   │   ├── hub_screen.dart       # Список треков, поиск, табы, infinity scroll
-│   │   └── player_screen.dart    # Полноэкранный плеер
-│   └── theme/ng_theme.dart       # NG-цвета
+│   ├── screens/                       # Хаб, плеер, библиотека, аккаунт, артисты, поиск
+│   ├── widgets/                       # Ретро-виджеты: хром 2015, votebar, мини-плеер
+│   └── theme/ng_theme.dart            # NG-палитра и шрифты
 ├── viewmodel/
-│   └── ng_viewmodel.dart         # Логика (порт MainViewModel)
-└── main.dart                     # Точка входа
+│   ├── ng_viewmodel.dart              # Состояние каталога и плеера
+│   └── library_viewmodel.dart         # Локальная библиотека
+└── main.dart                          # Точка входа
 ```
+
+## Disclaimer
+
+Приложение неофициальное и не связано с Newgrounds. Все права на контент принадлежат его авторам и Newgrounds.
