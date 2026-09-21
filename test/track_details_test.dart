@@ -8,6 +8,17 @@ import 'package:ngmusic/data/model/track.dart';
 import 'package:ngmusic/data/repository/ng_repository.dart';
 
 Track _blank() => Track(
+      id: '1580000',
+      title: 'Xenoglossy',
+      artist: '8-BiTek',
+      genre: '',
+      iconUrl: '',
+      duration: 0,
+      audioType: 3,
+    );
+
+/// Фикстура 1572356 — id финален, поэтому отдельный конструктор.
+Track _legacy() => Track(
       id: '1572356',
       title: 'Xenoglossy',
       artist: '8-BiTek',
@@ -21,7 +32,7 @@ void main() {
   test('sidestats со страницы трека разбираются в поля Track', () {
     final html =
         File('test/fixtures/listen_1572356.html').readAsStringSync();
-    final track = _blank();
+    final track = _legacy();
 
     NgRepository().parseListenDetails(track, html);
 
@@ -36,6 +47,21 @@ void main() {
     expect(track.fileInfo, contains('Song'));
     expect(track.description, contains('random garba'));
     expect(track.license, contains('Please contact me'));
+  });
+
+  test('Waiting for N more votes: балл спрятан, остаток сохранён', () {
+    final html =
+        File('test/fixtures/listen_waiting.html').readAsStringSync();
+    final track = _blank();
+
+    NgRepository().parseListenDetails(track, html);
+
+    // NG прячет оценку, пока голосов меньше пяти: вместо звёзд —
+    // «Waiting for 3 more votes». Парсер должен сохранить остаток
+    // и не оставить фейковый score с прошлого парсинга.
+    expect(track.votesPending, 3);
+    expect(track.score, isNull);
+    expect(track.listens, '96');
   });
 
   test('ul.trophies даёт награды, включая Frontpaged', () {
@@ -69,7 +95,8 @@ void main() {
   });
 
   test('обложка отдаётся кандидатами от _raw.png к превью', () {
-    final track = _blank()..iconUrl = 'https://aicon.ngfiles.com/1572/1572356_medium.webp?f1';
+    final track = _legacy()
+      ..iconUrl = 'https://aicon.ngfiles.com/1572/1572356_medium.webp?f1';
 
     expect(track.artworkUrls.first,
         'https://aicon.ngfiles.com/1572/1572356_raw.png');
