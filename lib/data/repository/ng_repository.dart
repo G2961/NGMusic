@@ -494,8 +494,17 @@ class NgRepository {
     try {
       // Текущее состояние — чтобы не togglenуть лишний раз (POST всегда
       // переключает, а не ставит).
-      final html = await _connectRawAuth(pageUrl, cookie);
-      final button = await _favoriteButton(trackId, cookie, html);
+      final pageResp = await _fetch(pageUrl, cookie: cookie);
+      if (pageResp.statusCode != 200) {
+        debugPrint('[ng] fav: страница трека -> ${pageResp.statusCode}');
+        return null;
+      }
+      final html = pageResp.body;
+      // CSRF-сессия GET и POST должна совпадать: NG при GET может ротировать
+      // сессию через Set-Cookie — если её выбросить, POST уйдёт со старой
+      // кукой и NG ответит 419 (token mismatch). Мержим обновления.
+      final cookieForPost = _mergeSetCookie(cookie, pageResp.headers['set-cookie']);
+      final button = await _favoriteButton(trackId, cookieForPost, html);
       if (button == null) {
         debugPrint('[ng] кнопки избранного нет на $pageUrl — '
             'скорее всего, сессия не авторизована');
@@ -503,18 +512,19 @@ class NgRepository {
       }
       if (button.active == add) return add;
 
+      // 419 у Laravel = CSRF mismatch: токен из свежего HTML + свежая кука.
+      // Origin не шлём — браузерный AJAX с одного origin его не ставит.
       final response = await http
           .post(
             Uri.parse('$_baseUrl/favorites/audio/$trackId/favorite'),
             headers: {
               'User-Agent': _userAgent,
-              'Cookie': cookie,
+              'Cookie': cookieForPost,
               'X-Requested-With': 'XMLHttpRequest',
               'X-CSRF-TOKEN': _csrfFrom(html) ?? '',
               'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
               'Accept': 'application/json, text/javascript, */*; q=0.01',
               'Referer': pageUrl,
-              'Origin': _baseUrl,
             },
             body: add ? '___ng_design=2015' : '',
           )
@@ -531,6 +541,33 @@ class NgRepository {
       debugPrint('[ng] setFavorite($trackId, $add) failed: $e');
       return null;
     }
+  }
+
+  /// Вливает Set-Cookie из ответа в строку куки для следующего запроса:
+  /// пары `name=value` из заголовка заменяют/добавляются, остальное
+  /// (HttpOnly-атрибуты, пути) не нужно — заголовок Cookie это только пары.
+  String _mergeSetCookie(String cookie, String? setCookie) {
+    if (setCookie == null || setCookie.isEmpty) return cookie;
+    final jar = <String, String>{};
+    for (final part in cookie.split('; ')) {
+      final i = part.indexOf('=');
+      if (i > 0) jar[part.substring(0, i)] = part.substring(i + 1);
+    }
+    // package:http склеивает несколько Set-Cookie в один заголовок
+    // через запятую; Expires с запятыми внутри режем по границам пар.
+    final merged = setCookie;
+    final re = RegExp(r'[^,; ]+=[^;,]*');
+    for (final m in re.allMatches(merged)) {
+      final pair = m.group(0)!;
+      final i = pair.indexOf('=');
+      if (i <= 0) continue;
+      final name = pair.substring(0, i);
+      final value = pair.substring(i + 1);
+      // Expires=Wed, 21 Oct … содержит запятую — это атрибут, не новая кука.
+      if (value.contains(',')) continue;
+      jar[name] = pair;
+    }
+    return jar.entries.map((e) => e.value).join('; ');
   }
 
   /// CSRF-токен из `<meta name="csrf-token">` — jQuery NG вставляет его
@@ -606,7 +643,7 @@ class NgRepository {
         type: 'follow',
         add: add,
         button: button,
-        cookie: cookie,
+        cookie: cookieForPost,
         referer: '$origin/',
         csrfToken: _csrfFrom(page.body),
       );
@@ -783,12 +820,17 @@ class NgRepository {
 
   /// Страница отзывов целиком: список + номер страницы из «Page 1 of 56».
   /// [sort] — `date` | `score`. Возвращает null при ошибке сети.
+  /// NG 2026 отдаёт список только авторизованным: гостю приходит пустая
+  /// колонка — поэтому качаем с кукой сессии, если она есть.
   Future<ReviewsPage?> getReviews(String trackId,
       {String sort = 'date', int page = 1}) async {
     final s = sort == 'score' ? 'score' : 'date';
     try {
-      final html = await _connectRaw(
-          '$_baseUrl/reviews/portal/$trackId/3/$s/$page');
+      final url = '$_baseUrl/reviews/portal/$trackId/3/$s/$page';
+      final cookie = await NgAuth.getCookie();
+      final html = (cookie != null && cookie.isNotEmpty)
+          ? await _connectRawAuth(url, cookie)
+          : await _connectRaw(url);
       final pages = RegExp(r'Page</span>\s*\d+\s*of\s*(\d+)')
               .firstMatch(html)?.group(1);
       return ReviewsPage(
@@ -1788,14 +1830,18 @@ class NgRepository {
       final playEl = li.querySelector('[data-audio-duration]') ??
           li.querySelector('[data-hub-id]');
 
-      final title = (li.querySelector('h4.item-title') ??
+      // 2026-вёрстка: .detail-title > h4 (было h4.item-title — NG переверстал,
+      // из-за чего New/Popular/Top Rated молча парсились в пустой список).
+      final title = (li.querySelector('.detail-title h4') ??
+              li.querySelector('h4.item-title') ??
               li.querySelector('h4') ??
               li.querySelector('.title'))
           ?.text
           .trim();
       if (title == null || title.isEmpty) continue;
 
-      final artist = (li.querySelector('strong') ??
+      final artist = (li.querySelector('.detail-title strong') ??
+              li.querySelector('strong') ??
               li.querySelector('.item-details-main strong') ??
               li.querySelector('.detail-author'))
           ?.text
