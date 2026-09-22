@@ -1,4 +1,5 @@
 # NGMusic
+<img width="2160" height="1080" alt="Picsart_26-09-22_14-13-50-119" src="https://github.com/user-attachments/assets/70199b32-7fd9-4732-a8ec-e77aa689683b" />
 
 Мобильный плеер для [Newgrounds Audio Portal](https://www.newgrounds.com/audio) — неофициальный клиент, имеющий большой функционал и возможности. Тот же NG Audio Portal, но в виде удобного приложения.
 ## Что умеет
