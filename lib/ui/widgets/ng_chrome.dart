@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../theme/ng_theme.dart';
+import 'ng_retro.dart';
+
+/// Шапка и навигация: две дизайн-эпохи (2015 и 2024) в одних виджетах.
 
 /// Шапка и навигация сайта Newgrounds 2015, сжатые под телефон.
 ///
@@ -42,6 +45,55 @@ class NgSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (themeCtl.textured) {
+      // 2015: чёрная полоса .sitelinks — лупа + золотое поле + кнопка.
+      return Container(
+        height: 40,
+        color: ngBlack,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Image.asset('assets/ng2015/a15/magnifier.png',
+                  width: 25, height: 25),
+            ),
+            Expanded(
+              child: NgTextField(
+                controller: controller,
+                focusNode: focusNode,
+                hint: 'Search Audio',
+                onSubmitted: onSubmit,
+                onChanged: (v) {
+                  if (v.isEmpty) onClear?.call();
+                },
+                suffix: searching
+                    ? NgIconButton(
+                        icon: 'close',
+                        padding: 4,
+                        onTap: () {
+                          controller.clear();
+                          onClear?.call();
+                          focusNode?.unfocus();
+                        },
+                      )
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 5),
+            NgButton(
+              label: 'Search',
+              width: 66,
+              onPressed: () => onSubmit(controller.text),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Шапка 2024: логотип слева, поиск по центру, юзер справа — всё в одной
+    // строке (в 2024 sitelinks и header слиты). Поиск — тёмное поле
+    // (rgb(40,43,48), радиус 4) с круглой лупой.
     return Container(
       height: 40,
       color: ngBlack,
@@ -59,8 +111,7 @@ class NgSearchBar extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search,
-                      size: 16, color: ngDim),
+                  Icon(Icons.search, size: 16, color: ngDim),
                   const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
@@ -71,16 +122,16 @@ class NgSearchBar extends StatelessWidget {
                         if (v.isEmpty) onClear?.call();
                       },
                       cursorColor: ngGold,
-                      style: const TextStyle(
-                          fontFamily: 'Arial',
+                      style: TextStyle(
+                          fontFamily: ngHeaderFont,
                           color: ngText,
                           fontSize: 13),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
                         hintText: 'Search Audio',
-                        hintStyle: const TextStyle(
-                            fontFamily: 'Arial',
+                        hintStyle: TextStyle(
+                            fontFamily: ngHeaderFont,
                             color: ngDim,
                             fontSize: 13),
                         contentPadding: EdgeInsets.zero,
@@ -94,15 +145,15 @@ class NgSearchBar extends StatelessWidget {
                         onClear?.call();
                         focusNode?.unfocus();
                       },
-                      child: const Icon(Icons.close,
-                          size: 16, color: ngDim),
+                      child: Icon(Icons.close, size: 16, color: ngDim),
                     ),
                 ],
               ),
             ),
           ),
           const SizedBox(width: 8),
-          _ChromeButton(label: 'Search', onPressed: () => onSubmit(controller.text)),
+          _ChromeButton(
+              label: 'Search', onPressed: () => onSubmit(controller.text)),
         ],
       ),
     );
@@ -143,7 +194,7 @@ class _ChromeButton extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Arial',
             color: ngGold,
             fontSize: 12,
@@ -179,6 +230,53 @@ class NgLogoBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (themeCtl.textured) {
+      // 2015: логобар 62px с рамкой снизу, лого-маскот слева.
+      return Container(
+        height: 62,
+        decoration: BoxDecoration(
+          color: ngBlack,
+          border: Border(bottom: BorderSide(color: ngHairline)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            Image.asset(NgTex.logo, height: 44, fit: BoxFit.contain),
+            if (middle != null) ...[
+              const SizedBox(width: 12),
+              Expanded(child: middle!),
+            ] else
+              const Spacer(),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onUserTap,
+              child: username == null
+                  ? Text('Login / Sign Up',
+                      style: TextStyle(
+                          fontFamily: ngHeaderFont,
+                          color: ngGold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold))
+                  : Row(
+                      children: [
+                        Text(username!,
+                            style: TextStyle(
+                                fontFamily: ngHeaderFont,
+                                color: ngGold,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 6),
+                        _Avatar(url: avatarUrl),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Логотип-строка 2024: тоньше (44px), без рамки, юзер справа с аватаром
+    // в тёмном кружке.
     return Container(
       height: 44,
       color: ngBlack,
@@ -200,17 +298,17 @@ class NgLogoBar extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTap: onUserTap,
             child: username == null
-                ? const Text('Login / Sign Up',
+                ? Text('Login / Sign Up',
                     style: TextStyle(
-                        fontFamily: 'Arial',
+                        fontFamily: ngHeaderFont,
                         color: ngGold,
                         fontSize: 13,
                         fontWeight: FontWeight.bold))
                 : Row(
                     children: [
                       Text(username!,
-                          style: const TextStyle(
-                              fontFamily: 'Arial',
+                          style: TextStyle(
+                              fontFamily: ngHeaderFont,
                               color: ngGold,
                               fontSize: 13,
                               fontWeight: FontWeight.bold)),
@@ -235,7 +333,7 @@ class _Avatar extends StatelessWidget {
     return Container(
       width: 30,
       height: 30,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBrown,
         border: Border.fromBorderSide(BorderSide(color: ngGold)),
       ),
@@ -280,6 +378,12 @@ class NgNavPlate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Expanded — только в горизонтальном Row навбара: в вертикальной
+    // стопке ландшафта (side) родитель — Column с неограниченной высотой,
+    // и Expanded там ронял layout всего хаба (чёрный экран Classic).
+    if (themeCtl.textured) {
+      return side ? _plate2015() : Expanded(child: _plate2015());
+    }
     // Альфа линии: 0.45 (далеко) → 1.0 (активна) — плавно по activation.
     final lineAlpha = 0.45 + 0.55 * activation;
     // Подсветка снизу — до 0.32 альфы у активной.
@@ -311,7 +415,8 @@ class NgNavPlate extends StatelessWidget {
                 ),
           gradient: glowAlpha > 0.01
               ? LinearGradient(
-                  begin: side ? Alignment.centerLeft : Alignment.topCenter,
+                  begin:
+                      side ? Alignment.centerLeft : Alignment.topCenter,
                   end: side ? Alignment.centerRight : Alignment.bottomCenter,
                   colors: [
                     accent.withValues(alpha: 0.0),
@@ -330,7 +435,7 @@ class NgNavPlate extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: side ? TextAlign.left : TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Arial',
+            fontFamily: ngHeaderFont,
             fontSize: 15,
             height: 1.4,
             fontWeight: textWeight,
@@ -345,6 +450,119 @@ class NgNavPlate extends StatelessWidget {
     // Expanded только в горизонтальном Row (NgNavPlates) — там он растягивает
     // плашки на равные доли ширины.
     return side ? plate : Expanded(child: plate);
+  }
+
+  /// Стеклянная плашка навбара 2015: светлый блик сверху, объёмный градиент
+  /// с переломом на 50%, цветная полоса портала (снизу в горизонтали,
+  /// справа в вертикальной стопке ландшафта). Тона — замеры спрайта
+  /// `navbar2014.jpg`. Подцветка корпуса интерполируется по [activation].
+  Widget _plate2015() {
+    final t = 0.34 * activation;
+    final strip = Color.lerp(
+        Color.lerp(accent, ngBlack, 0.45)!, accent, activation)!;
+
+    Color body(Color base) =>
+        Color.lerp(base, Color.lerp(accent, ngBlack, 0.4)!, t)!;
+
+    final gloss = Color.lerp(
+        const Color(0xFF807C7E), Color.lerp(accent, ngWhite, 0.25)!, t * 0.5)!;
+
+    Widget core = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: side ? Alignment.centerLeft : Alignment.topCenter,
+          end: side ? Alignment.centerRight : Alignment.bottomCenter,
+          stops: const [0, 0.5, 0.5, 1],
+          colors: [
+            body(const Color(0xFF524E50)),
+            body(const Color(0xFF3C3B3D)),
+            body(const Color(0xFF2C2B2D)),
+            body(const Color(0xFF141314)),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                fontFamily: ngHeaderFont,
+                fontSize: 16,
+                height: 1.1,
+                color: activation > 0.5 ? ngWhite : ngText,
+                shadows: [
+                  Shadow(color: ngBlack, offset: Offset(0, 1)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (side) {
+      // Вертикальная стопка (ландшафт): полоса портала справа.
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          margin: const EdgeInsets.only(bottom: 2),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: body(const Color(0xFF2A2628))),
+              left: BorderSide(color: body(const Color(0xFF2A2628))),
+              right: BorderSide(color: strip, width: 4),
+              bottom: BorderSide(color: const Color(0xFF06101A)),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(height: 1, color: gloss),
+              Expanded(child: core),
+              Container(height: 1, color: body(const Color(0xFF2D2B2B))),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(height: 1, color: body(const Color(0xFF2A2628))),
+            Container(height: 1, color: gloss),
+            Expanded(child: core),
+            Container(height: 1, color: body(const Color(0xFF2D2B2B))),
+            Container(height: 1, color: const Color(0xFF06101A)),
+            Container(
+              height: 4,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.lerp(strip, ngWhite, 0.18)!,
+                    Color.lerp(strip, ngBlack, 0.35)!,
+                    strip,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -388,6 +606,99 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (themeCtl.textured) {
+      // Стеклянная кнопка 2015 — тот же корпус, что у плашек навбара:
+      // блик сверху, объёмный градиент с переломом, цветная полоса снизу.
+      final t = selected ? 0.34 : 0.0;
+      final strip = selected
+          ? Color.lerp(accent, ngWhite, 0.35)!
+          : Color.lerp(ngBlack, accent, 0.55)!;
+
+      Color body(Color base) =>
+          Color.lerp(base, Color.lerp(accent, ngBlack, 0.4)!, t)!;
+
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            margin: EdgeInsets.only(right: last ? 0 : 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                    height: 1, color: body(const Color(0xFF2A2628))),
+                Container(
+                  height: 1,
+                  color: selected
+                      ? Color.lerp(const Color(0xFF807C7E),
+                          Color.lerp(accent, ngWhite, 0.25)!, 0.5)
+                      : const Color(0xFF807C7E),
+                ),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0, 0.5, 0.5, 1],
+                        colors: [
+                          body(const Color(0xFF524E50)),
+                          body(const Color(0xFF3C3B3D)),
+                          body(const Color(0xFF2C2B2D)),
+                          body(const Color(0xFF141314)),
+                        ],
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Opacity(
+                          opacity: selected ? 1 : 0.6,
+                          child: Image.asset(NgTex.h2(icon),
+                              width: 22, height: 22),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontFamily: ngHeaderFont,
+                            fontSize: 16,
+                            height: 1.1,
+                            color: selected ? ngWhite : ngText,
+                            shadows: [
+                              Shadow(color: ngBlack, offset: Offset(0, 1)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                    height: 1, color: body(const Color(0xFF2D2B2B))),
+                Container(height: 1, color: const Color(0xFF06101A)),
+                Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color.lerp(strip, ngWhite, 0.18)!,
+                        Color.lerp(strip, ngBlack, 0.35)!,
+                        strip,
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // Полоска: приглушённая, но видимая всегда; активная — полная яркость.
     final lineAlpha = 0.35 + 0.65 * activation;
     // Фон плавно подливается к активному; текст/иконка — чётко по факту
@@ -424,7 +735,7 @@ class _NavButton extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: 'Arial',
+                    fontFamily: ngHeaderFont,
                     fontSize: 13,
                     fontWeight:
                         selected ? FontWeight.w500 : FontWeight.normal,
@@ -615,3 +926,184 @@ class NgBottomNav extends StatelessWidget {
 
 /// Подвал `#footer` был тут раньше (полосатая лента + копирайт с танком).
 /// Убран: на телефоне он только ел высоту списка и мешался под плеером.
+
+// ── Вертикальный навигационный рейл (ландшафт, 2015) ─────────────────────────
+
+/// Уголок-стрелка в правом нижнем углу плашки (в спрайте — вырезанный
+/// треугольник цвета портала).
+class _PlateCorner extends CustomPainter {
+  final Color color;
+  const _PlateCorner({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Path()
+      ..moveTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(p, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_PlateCorner old) => old.color != color;
+}
+
+/// Кнопка рейла: узкая стеклянная иконка-плашка в стиле навбара 2015
+/// (блик, объёмный градиент, стрелка-уголок, полоса портала справа).
+/// Без подписи — назначение считывается с иконки.
+class NgRailButton extends StatelessWidget {
+  /// Имя иконки из спрайта `h2-all.png` (audio/list/user).
+  final String icon;
+  final Color accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const NgRailButton({
+    super.key,
+    required this.icon,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  IconData _iconFor(String name) {
+    switch (name) {
+      case 'audio':
+        return Icons.audio_file;
+      case 'list':
+        return Icons.queue_music;
+      case 'user':
+        return Icons.person_outline;
+      default:
+        return Icons.circle;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = selected ? 0.34 : 0.0;
+    final strip = selected
+        ? Color.lerp(accent, ngWhite, 0.35)!
+        : Color.lerp(ngBlack, accent, 0.55)!;
+
+    Color body(Color base) =>
+        Color.lerp(base, Color.lerp(accent, ngBlack, 0.4)!, t)!;
+
+    final gloss = selected
+        ? Color.lerp(
+            const Color(0xFF807C7E), Color.lerp(accent, ngWhite, 0.25)!, 0.5)
+        : const Color(0xFF807C7E);
+
+    if (themeCtl.textured) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          height: 42,
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: body(const Color(0xFF2A2628))),
+              left: BorderSide(color: body(const Color(0xFF2A2628))),
+              bottom: BorderSide(color: const Color(0xFF06101A)),
+              right: BorderSide(color: strip, width: 3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(height: 1, color: gloss),
+              Expanded(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Center(
+                      child: Opacity(
+                        opacity: selected ? 1 : 0.6,
+                        child:
+                            Image.asset(NgTex.h2(icon), width: 22, height: 22),
+                      ),
+                    ),
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: CustomPaint(
+                        size: const Size(7, 7),
+                        painter: _PlateCorner(color: strip),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(height: 1, color: body(const Color(0xFF2D2B2B))),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 2024: плоская иконка с полоской слева (на случай ландшафта).
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        color: selected ? const Color(0xFF19181C) : ngBlack,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 3, color: accent.withValues(alpha: selected ? 1 : 0.35)),
+            Expanded(
+              child: Icon(_iconFor(icon),
+                  size: 22, color: selected ? ngWhite : ngDim),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Вертикальный рейл из [NgRailButton] — замена нижней навигации в ландшафте
+/// 2015: прикреплён к правому краю, экономит высоту для плеера.
+class NgNavRail extends StatelessWidget {
+  final int index;
+  final ValueChanged<int> onSelect;
+
+  static const _items = [
+    ('audio', NgAccent.green),
+    ('list', NgAccent.blue),
+    ('user', NgAccent.orange),
+  ];
+
+  const NgNavRail({
+    super.key,
+    required this.index,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 52,
+      color: ngBlack,
+      child: SafeArea(
+        left: false,
+        top: false,
+        bottom: false,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _items.length; i++)
+              NgRailButton(
+                icon: _items[i].$1,
+                accent: _items[i].$2,
+                selected: i == index,
+                onTap: () => onSelect(i),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

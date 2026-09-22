@@ -131,7 +131,13 @@ class _HubScreenState extends State<HubScreen>
     final landscape = MediaQuery.of(context).size.width >
         MediaQuery.of(context).size.height;
 
-    return Scaffold(
+    // При повороте экран перестраивается с нуля: state/TabController
+    // живут в State (сохранились), но рендер-объекты не переезжают
+    // между раскладками со старыми размерами — иначе layout обрывался
+    // и контент не рисовался (чёрный экран в ландшафте классики).
+    return KeyedSubtree(
+      key: ValueKey('hub-$landscape'),
+      child: Scaffold(
       backgroundColor: ngBlack,
       body: SafeArea(
         bottom: false,
@@ -151,17 +157,18 @@ class _HubScreenState extends State<HubScreen>
                       onTap: () => setState(() => _menuOpen = !_menuOpen),
                     )
                   : null,
+              // NgLogoBar сам оборачивает middle в Expanded — второй
+              // Expanded поверх давал «Competing ParentDataWidgets» и ронял
+              // mount поддерева шапки (чёрный контент в ландшафте).
               middle: landscape
-                  ? Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: NgSearchBar(
-                          controller: _searchCtrl,
-                          focusNode: _searchFocus,
-                          searching: vm.isInSearch,
-                          onSubmit: _onSearch,
-                          onClear: () => _onSearch(''),
-                        ),
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: NgSearchBar(
+                        controller: _searchCtrl,
+                        focusNode: _searchFocus,
+                        searching: vm.isInSearch,
+                        onSubmit: _onSearch,
+                        onClear: () => _onSearch(''),
                       ),
                     )
                   : null,
@@ -259,6 +266,7 @@ class _HubScreenState extends State<HubScreen>
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -281,36 +289,44 @@ class _HubScreenState extends State<HubScreen>
             ],
           );
     if (landscape) {
-      content = Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AnimatedBuilder(
-            animation: _tab.animation!,
-            builder: (_, __) => Column(
-              children: [
-                NgNavPlatesSide(
-                  labels: _tabLabels,
-                  index: _idx,
-                  onSelect: (i) => _tab.animateTo(i),
-                  progress: _tab.animation?.value ?? _idx.toDouble(),
-                ),
-                // Ультра-компактный плеер прижат к низу левой панели.
-                const Spacer(),
-                if (vm.currentTrack != null)
-                  SizedBox(
-                    width: 170,
-                    child: NgMiniPlayer(compact: true),
+      // Row(crossAxisAlignment: start) даёт детям неограниченную высоту —
+      // Spacer внутри левой колонки без ограничителя ронял layout
+      // («non-zero flex but incoming height constraints are unbounded»)
+      // и весь хаб оставался без раскладки (чёрный экран в ландшафте).
+      // IntrinsicHeight задаёт левой панели конечную высоту без stretch
+      // по всему Row.
+      content = IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedBuilder(
+              animation: _tab.animation!,
+              builder: (_, __) => Column(
+                children: [
+                  NgNavPlatesSide(
+                    labels: _tabLabels,
+                    index: _idx,
+                    onSelect: (i) => _tab.animateTo(i),
+                    progress: _tab.animation?.value ?? _idx.toDouble(),
                   ),
-              ],
+                  // Ультра-компактный плеер прижат к низу левой панели.
+                  const Spacer(),
+                  if (vm.currentTrack != null)
+                    SizedBox(
+                      width: 170,
+                      child: NgMiniPlayer(compact: true),
+                    ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8, right: 6, top: 8),
-              child: content,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8, right: 6, top: 8),
+                child: content,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
     return NotificationListener<ScrollNotification>(
@@ -416,7 +432,7 @@ class _GenreSidebarState extends State<_GenreSidebar> {
     final activeGenre = vm.genre?.id;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(right: BorderSide(color: ngHairline)),
       ),
@@ -426,13 +442,13 @@ class _GenreSidebarState extends State<_GenreSidebar> {
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: ngBlack,
               border: Border(bottom: BorderSide(color: ngHairline)),
             ),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'BROWSE AUDIO',
                     style: TextStyle(
@@ -658,7 +674,11 @@ class _TabPageState extends State<_TabPage> with AutomaticKeepAliveClientMixin {
         itemCount: s.tracks.length + (s.isLoadingMore ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i >= s.tracks.length) return const NgLoading(width: 100);
-          return _TrackRow(track: s.tracks[i], index: i);
+          return _TrackRow(
+            track: s.tracks[i],
+            index: i,
+            queue: s.tracks,
+          );
         },
       );
     }
@@ -731,7 +751,11 @@ class _SearchResultsState extends State<_SearchResults> {
         itemCount: vm.searchResults.length + (vm.isSearching ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i >= vm.searchResults.length) return const NgLoading(width: 100);
-          return _TrackRow(track: vm.searchResults[i], index: i);
+          return _TrackRow(
+            track: vm.searchResults[i],
+            index: i,
+            queue: vm.searchResults,
+          );
         },
       );
     }
@@ -750,7 +774,14 @@ class _SearchResultsState extends State<_SearchResults> {
 class _TrackRow extends StatelessWidget {
   final Track track;
   final int index;
-  const _TrackRow({required this.track, required this.index});
+
+  /// Список, из которого играем: очередь next/prev фиксируется в момент
+  /// тапа. Раньше очередь брали из «активной вкладки VM», которая с
+  /// реальной видимой вкладкой расходилась (пересоздание хаба при повороте
+  /// сбрасывало TabController, а _activeTab в VM — нет), и next играл
+  /// треки соседнего списка.
+  final List<Track> queue;
+  const _TrackRow({required this.track, required this.index, required this.queue});
 
   @override
   Widget build(BuildContext context) {
@@ -767,8 +798,9 @@ class _TrackRow extends StatelessWidget {
       playing: isActive,
       paused: isActive && !vm.isPlaying,
       onTap: () {
-        // Играем в пределах текущего списка (таб или поиск) — очередь артиста сбрасываем.
-        vm.setQueueContext(null);
+        // Очередь = список на экране в момент тапа (не «активная вкладка»
+        // VM — та расползается с UI после пересозданий хаба).
+        vm.setQueueContext(queue);
         vm.playTrack(track);
         _openPlayer(context);
       },
@@ -834,12 +866,12 @@ class _TrackActions extends StatelessWidget {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: ngPodBg,
-          shape: const RoundedRectangleBorder(
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(2)),
             side: BorderSide(color: ngPodBorder, width: 4),
           ),
-          title: const Text('Login Required', style: ngH2),
-          content: const Text('Log in to save favorites.', style: ngBody),
+          title: Text('Login Required', style: ngH2),
+          content: Text('Log in to save favorites.', style: ngBody),
           actionsPadding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
           actions: [
             NgButton(

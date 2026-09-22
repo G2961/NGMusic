@@ -76,14 +76,49 @@ class NgPod extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasHead = title != null;
     final content = Padding(padding: padding, child: child);
+    if (themeCtl.textured) {
+      // 2015: рамка 4px, текстурное тело, донышко podbot.
+      // (Бисект-хак «&& false» из охоты на чёрный экран удалён —
+      // причина была в Competing ParentDataWidgets, не в текстурах.)
+      return Container(
+        margin: margin,
+        decoration: BoxDecoration(
+          color: ngPodBg,
+          border: Border.fromBorderSide(
+              BorderSide(color: ngPodBorder, width: 4)),
+          borderRadius: const BorderRadius.all(Radius.circular(2)),
+          image: const DecorationImage(
+            image: AssetImage(NgTex.podBody),
+            repeat: ImageRepeat.repeat,
+            alignment: Alignment.topLeft,
+            fit: BoxFit.none,
+          ),
+          boxShadow: [
+            BoxShadow(color: ngBlack, blurRadius: 10, offset: Offset(0, 5))
+          ],
+        ),
+        child: Column(
+          mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasHead)
+              NgPodTop(icon: icon, title: title!, action: action, skin: skin),
+            if (hasHead) const NgPodBreaker(),
+            if (fill) Expanded(child: content) else content,
+            const _PodBot(),
+          ],
+        ),
+      );
+    }
     // 2024: pod — плоский тёмный корпус, скругление 4px, тонкая рамка.
     return Container(
       margin: margin,
       clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngPodBg,
-        border: Border.fromBorderSide(BorderSide(color: ngPodBorder, width: 1)),
-        borderRadius: BorderRadius.all(Radius.circular(4)),
+        border:
+            Border.fromBorderSide(BorderSide(color: ngPodBorder, width: 1)),
+        borderRadius: const BorderRadius.all(Radius.circular(4)),
       ),
       child: Column(
         mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
@@ -117,10 +152,75 @@ class NgPodTop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (themeCtl.textured) {
+      // `div.podtop` 2015 — 41px, текстура прижата влево, правый край
+      // дублируется справа (для action-плашки).
+      return SizedBox(
+        height: 41,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: skin.podtopFill,
+                image: DecorationImage(
+                  image: AssetImage(skin.podtop),
+                  alignment: Alignment.topLeft,
+                  fit: BoxFit.none,
+                ),
+              ),
+            ),
+            if (action != null)
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: skin.podtopFill,
+                    image: DecorationImage(
+                      image: AssetImage(skin.podtop),
+                      alignment: Alignment.topRight,
+                      fit: BoxFit.none,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6, right: 3),
+                    child: Center(child: action),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: 7,
+              top: 5,
+              bottom: 5,
+              right: action != null ? 120 : 5,
+              child: Row(
+                children: [
+                  if (icon != null) ...[
+                    Image.asset(NgTex.h2(icon!), width: 27, height: 27),
+                    const SizedBox(width: 9),
+                  ],
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: ngH2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    // `div.pod-head` 2024: 35px, градиентная планка, иконка 29×29.
     return Container(
       height: 35,
       padding: const EdgeInsets.only(right: 2),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -171,17 +271,57 @@ class NgPodTop extends StatelessWidget {
   }
 }
 
-/// Разделитель 2024: тонкая линия на стыке секций пода (в 2015 был
-/// градиентный перелом podbreaker). Оставлен для совместимости экранов.
+/// Разделитель: в 2015 — градиентный перелом podbreaker (10px),
+/// в 2024 — тонкая линия на стыке секций.
 class NgPodBreaker extends StatelessWidget {
   const NgPodBreaker({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    if (themeCtl.textured) {
+      // `div.podcontent { background: podbreaker-33.jpg no-repeat }` — тень.
+      return const SizedBox(
+        height: 10,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(NgTex.podbreaker),
+              alignment: Alignment.bottomLeft,
+              fit: BoxFit.none,
+            ),
+          ),
+        ),
+      );
+    }
+    return SizedBox(
       height: 1,
       child: DecoratedBox(
         decoration: BoxDecoration(color: ngHairline),
+      ),
+    );
+  }
+}
+
+/// `div.podbot { height:6px; border:1px solid #28242c; border-top:0 }` —
+/// донышко пода 2015 (в 2024 не рисуется).
+class _PodBot extends StatelessWidget {
+  const _PodBot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 6,
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: ngPodBotBorder),
+          right: BorderSide(color: ngPodBotBorder),
+          bottom: BorderSide(color: ngPodBotBorder),
+        ),
+        image: const DecorationImage(
+          image: AssetImage(NgTex.podbreaker),
+          alignment: Alignment.topLeft,
+          fit: BoxFit.none,
+        ),
       ),
     );
   }
@@ -207,6 +347,38 @@ class _NgPlateLinkState extends State<NgPlateLink> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
+    if (themeCtl.textured) {
+      // `div.podtop div a` 2015 — полосатая плашка.
+      return GestureDetector(
+        onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+        onTapUp: enabled ? (_) => setState(() => _down = false) : null,
+        onTapCancel: enabled ? () => setState(() => _down = false) : null,
+        onTap: widget.onTap,
+        child: Container(
+          height: 25,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(_down ? NgTex.linkPlateHover : NgTex.linkPlate),
+              repeat: ImageRepeat.repeatX,
+              alignment: Alignment.centerLeft,
+              fit: BoxFit.none,
+            ),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontFamily: ngHeaderFont,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: _down ? ngInk : (enabled ? ngGold : ngInk),
+            ),
+          ),
+        ),
+      );
+    }
+    // 2024: скруглённая кнопка 24px с тёмной подложкой.
     return GestureDetector(
       onTapDown: enabled ? (_) => setState(() => _down = true) : null,
       onTapUp: enabled ? (_) => setState(() => _down = false) : null,
@@ -226,7 +398,7 @@ class _NgPlateLinkState extends State<NgPlateLink> {
           maxLines: 1,
           overflow: TextOverflow.clip,
           style: TextStyle(
-            fontFamily: 'Arial',
+            fontFamily: ngHeaderFont,
             fontSize: 12,
             fontWeight: FontWeight.bold,
             height: 1.0,
@@ -266,6 +438,61 @@ class _NgButtonState extends State<NgButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
 
+    if (themeCtl.textured) {
+      // `button` 2015: текстура button-gold.gif, 9-patch.
+      final tex = !enabled
+          ? NgTex.buttonDisabled
+          : (_down ? NgTex.buttonHover : NgTex.buttonNormal);
+      return GestureDetector(
+        onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+        onTapUp: enabled ? (_) => setState(() => _down = false) : null,
+        onTapCancel: enabled ? () => setState(() => _down = false) : null,
+        onTap: widget.onPressed,
+        child: Container(
+          height: 27,
+          width: widget.width,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: ngBlack),
+              right: BorderSide(color: ngBlack),
+              bottom: BorderSide(color: ngBlack, width: 2),
+            ),
+            // 9-patch: края фиксированы, середина тянется.
+            image: DecorationImage(
+              image: AssetImage(tex),
+              centerSlice: const Rect.fromLTRB(6, 6, 60, 19),
+              fit: BoxFit.fill,
+            ),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (widget.icon != null) ...[
+                  Image.asset(NgTex.a15(widget.icon!, dark: _down),
+                      width: 15, height: 15),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontFamily: ngHeaderFont,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: enabled ? (_down ? ngInk : ngGold) : ngDim,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 2024: плоская тёмная с оранжевым текстом и скруглением 4px.
     return GestureDetector(
       onTapDown: enabled ? (_) => setState(() => _down = true) : null,
       onTapUp: enabled ? (_) => setState(() => _down = false) : null,
@@ -283,26 +510,29 @@ class _NgButtonState extends State<NgButton> {
           borderRadius: const BorderRadius.all(Radius.circular(4)),
         ),
         alignment: Alignment.center,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.icon != null) ...[
-              Image.asset(NgTex.a15(widget.icon!, dark: _down),
-                  width: 15, height: 15),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              widget.label,
-              maxLines: 1,
-              style: TextStyle(
-                fontFamily: 'Arial',
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                height: 1.0,
-                color: !enabled ? ngDim : (_down ? ngInk : ngGold),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.icon != null) ...[
+                Image.asset(NgTex.a15(widget.icon!, dark: _down),
+                    width: 15, height: 15),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                widget.label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontFamily: ngHeaderFont,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  height: 1.0,
+                  color: !enabled ? ngDim : (_down ? ngInk : ngGold),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -432,6 +662,70 @@ class NgAudioRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (themeCtl.textured) {
+      // 2015: квадратная иконка 39×39, название золотым, жанр и автор
+      // колонкой (как `table.audiolist`).
+      return NgListRow(
+        index: index,
+        onTap: onTap,
+        skin: skin,
+        highlight: playing,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+          child: Row(
+            children: [
+              NgTrackIcon(url: iconUrl, size: 39),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style:
+                          playing ? ngLink.copyWith(color: ngWhite) : ngLink,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (artist.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: GestureDetector(
+                          onTap: onArtistTap,
+                          child: Text.rich(
+                            TextSpan(
+                              style: ngLabel,
+                              children: [
+                                const TextSpan(text: 'by '),
+                                TextSpan(text: artist, style: ngLink),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    if (genre.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(genre,
+                            style: ngLabel.copyWith(color: ngText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (trailing != null) trailing!,
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 2024: иконка-диск 60×60 с PLAY-оверлеем, мета-колонка справа.
     return NgListRow(
       index: index,
       onTap: onTap,
@@ -484,16 +778,16 @@ class NgAudioRow extends StatelessWidget {
                         onTap: onArtistTap,
                         child: Text.rich(
                           TextSpan(
-                            style: const TextStyle(
-                                fontFamily: 'Arial',
+                            style: TextStyle(
+                                fontFamily: ngHeaderFont,
                                 fontSize: 13,
                                 color: ngText),
                             children: [
                               const TextSpan(text: 'by '),
                               TextSpan(
                                 text: artist,
-                                style: const TextStyle(
-                                  fontFamily: 'Arial',
+                                style: TextStyle(
+                                  fontFamily: ngHeaderFont,
                                   fontSize: 13,
                                   color: ngText,
                                   fontWeight: FontWeight.bold,
@@ -523,7 +817,7 @@ class NgAudioRow extends StatelessWidget {
             Container(
               margin: const EdgeInsets.only(left: 8),
               padding: const EdgeInsets.only(left: 8),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
                   left: BorderSide(color: ngDimmer, width: 1),
                 ),
@@ -568,7 +862,7 @@ class _PlayOverlay extends StatelessWidget {
             icon,
             size: 34,
             color: ngWhite,
-            shadows: const [Shadow(color: ngBlack, blurRadius: 4)],
+            shadows: [Shadow(color: ngBlack, blurRadius: 4)],
           ),
         ),
       ),
@@ -637,7 +931,7 @@ class NgInfoTable extends StatelessWidget {
                           Text(
                             items[i].value,
                             style:
-                                const TextStyle(fontSize: 12, color: ngWhite),
+                                TextStyle(fontSize: 12, color: ngWhite),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -696,6 +990,10 @@ class NgPageColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!themeCtl.textured) {
+      // 2024: фон страницы плоский, без серой колонки.
+      return Padding(padding: padding, child: child);
+    }
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: _gradient),
       child: Padding(padding: padding, child: child),
@@ -812,18 +1110,26 @@ class NgHr extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 2,
-      margin: margin,
-      decoration: const BoxDecoration(
-        color: ngBlack,
-        image: DecorationImage(
-          image: AssetImage(NgTex.podstripe),
-          alignment: Alignment.bottomCenter,
-          repeat: ImageRepeat.repeatX,
-          fit: BoxFit.none,
+    if (themeCtl.textured) {
+      // `hr 2015 { height:2px; background: #000 url(podstripe.gif) }`
+      return Container(
+        height: 2,
+        margin: margin,
+        decoration: BoxDecoration(
+          color: ngBlack,
+          image: DecorationImage(
+            image: AssetImage(NgTex.podstripe),
+            alignment: Alignment.bottomCenter,
+            repeat: ImageRepeat.repeatX,
+            fit: BoxFit.none,
+          ),
         ),
-      ),
+      );
+    }
+    return Container(
+      height: 1,
+      margin: margin,
+      color: ngHairline,
     );
   }
 }
@@ -842,6 +1148,26 @@ class NgStars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (themeCtl.textured) {
+      // 2015: `vp-Stars.png` — полоса из 5 звёзд, заливка обрезкой.
+      final w = 87.0 * scale;
+      final h = 15.0 * scale;
+      final frac = (score / 5).clamp(0.0, 1.0);
+      return SizedBox(
+        width: w,
+        height: h,
+        child: Stack(
+          children: [
+            Image.asset(NgTex.starsEmpty, width: w, height: h, fit: BoxFit.fill),
+            ClipRect(
+              clipper: _WidthClipper(frac),
+              child: Image.asset(NgTex.starsFull,
+                  width: w, height: h, fit: BoxFit.fill),
+            ),
+          ],
+        ),
+      );
+    }
     final w = 18.0 * scale;
     final h = 17.0 * scale;
     return SizedBox(
@@ -964,7 +1290,11 @@ class _NgVoteStarsState extends State<NgVoteStars> {
 
   /// NG-шкала: label[value=N] накрывает N×10% бара, значит позиция x
   /// принадлежит значению ceil(x/W×10) — как CSS box model сайта.
-  int _valueAt(double dx) => ((dx / _barW) * 10).ceil().clamp(1, 10);
+  /// 0 = весь путь влево (левый край бара); на сайте ноль достижим
+  /// только клавиатурой/блам-звездой, у нас — и драгом тоже.
+  int _valueAt(double dx) => dx <= 0
+      ? 0
+      : ((dx / _barW) * 10).ceil().clamp(1, 10);
 
   void _preview(int? v) {
     setState(() => _drag = v);
@@ -1033,6 +1363,7 @@ class _NgVoteStarsState extends State<NgVoteStars> {
                 child: Stack(children: [
                   Positioned.fill(child: _VoteStarTile(frame: 3)),
                   if (_zeroArmed ||
+                      preview == 0 ||
                       widget.voted == 0 ||
                       (widget.voted != null && voted == 0 && preview == null))
                     Positioned.fill(child: _VoteStarTile(frame: 4)),
@@ -1193,7 +1524,7 @@ class NgStripedBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: ngSeekBorder)),
       ),
@@ -1267,9 +1598,53 @@ class NgTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!themeCtl.textured) {
+      // 2024: тёмное поле rgb(40,43,48) со светлым текстом.
+      return Container(
+        height: 28,
+        decoration: BoxDecoration(
+          color: const Color(0xFF282B30),
+          border: Border.all(color: ngHairline),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Center(
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  obscureText: obscure,
+                  onSubmitted: onSubmitted,
+                  onChanged: onChanged,
+                  cursorColor: ngGold,
+                  cursorWidth: 1,
+                  style: TextStyle(
+                      fontFamily: ngHeaderFont,
+                      color: ngText,
+                      fontSize: 13),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: hint,
+                    hintStyle: TextStyle(
+                        fontFamily: ngHeaderFont,
+                        color: ngDim,
+                        fontSize: 13),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 5),
+                  ),
+                ),
+              ),
+            ),
+            if (suffix != null) suffix!,
+          ],
+        ),
+      );
+    }
+    // 2015: светлая золотистая плашка с тёмным текстом.
     return Container(
       height: 28,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0xFFE0C070),
         border: Border.fromBorderSide(BorderSide(color: ngBlack)),
         image: DecorationImage(
@@ -1372,7 +1747,7 @@ class NgSectionHead extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: ngBlack,
           border: Border(
             top: BorderSide(color: ngHairline),

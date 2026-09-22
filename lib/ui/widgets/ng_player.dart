@@ -23,17 +23,18 @@ enum NgGlyph { play, pause, prev, next, shuffle, repeat, repeatOne, chevronDown 
 
 class NgGlyphIcon extends StatelessWidget {
   final NgGlyph glyph;
-  final Color color;
   final double size;
 
   /// `.ngp-play { width:22px; height:24px }` — глиф чуть выше, чем шире.
-  const NgGlyphIcon(this.glyph, {super.key, this.color = ngPlayerYellow, this.size = 22});
+  const NgGlyphIcon(this.glyph, {super.key, this.color, this.size = 22});
+
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: Size(size, size),
-      painter: _GlyphPainter(glyph, color),
+      painter: _GlyphPainter(glyph, color ?? ngPlayerYellow),
     );
   }
 }
@@ -236,7 +237,7 @@ class NgPlayerFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: margin,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: Color(0xFF2A2724))),
         borderRadius: BorderRadius.all(Radius.circular(2)),
@@ -271,13 +272,13 @@ class NgPlayerBar extends StatelessWidget {
       height: height,
       padding: padding,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [ngPlayerBarTop, ngPlayerBarBot],
         ),
         border: topBorder
-            ? const Border(top: BorderSide(color: ngBlack))
+            ? Border(top: BorderSide(color: ngBlack))
             : null,
       ),
       child: Row(mainAxisAlignment: alignment, children: children),
@@ -317,7 +318,7 @@ class NgTimeLabel extends StatelessWidget {
         children: [
           TextSpan(
             text: fmt(position),
-            style: const TextStyle(color: ngWhite),
+            style: TextStyle(color: ngWhite),
           ),
           const TextSpan(text: ' / '),
           TextSpan(text: fmt(duration)),
@@ -456,7 +457,7 @@ class NgStripedSeek extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: ngSeekBorder)),
         borderRadius: BorderRadius.all(Radius.circular(2)),
@@ -534,7 +535,7 @@ class NgVizPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: RadialGradient(
           center: Alignment(0, -0.2),
           radius: 0.95,
@@ -654,7 +655,7 @@ class NgArtImage extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       errorWidget: (_, __, ___) => _cascade(urls, i + 1),
-      placeholder: (_, __) => const ColoredBox(color: ngPodBg),
+      placeholder: (_, __) => ColoredBox(color: ngPodBg),
     );
   }
 }
@@ -674,14 +675,14 @@ class NgArtFrame extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngPodBg,
         border: Border.fromBorderSide(BorderSide(color: ngBlack, width: 4)),
         boxShadow: [BoxShadow(color: ngBlack, blurRadius: 12, offset: Offset(0, 4))],
       ),
       child: DecoratedBox(
         // золотая линия внутри рамки, как у превью в `.itemdetails`
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border.fromBorderSide(BorderSide(color: ngBrown)),
         ),
         child: _cascade(0),
@@ -699,7 +700,7 @@ class NgArtFrame extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       errorWidget: (_, __, ___) => _cascade(i + 1),
-      placeholder: (_, __) => const ColoredBox(color: ngPodBg),
+      placeholder: (_, __) => ColoredBox(color: ngPodBg),
     );
   }
 }
