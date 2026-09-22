@@ -68,7 +68,15 @@ class _AccountScreenState extends State<AccountScreen>
         child: NgLoading(),
       );
     } else if (user == null) {
-      content = _LoggedOutPod(onLogin: _login);
+      // Гостю тоже доступны настройки: смена дизайна и «куда сохранять
+      // избранное» не требуют аккаунта. Логин — отдельным подом сверху.
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _LoggedOutPod(onLogin: _login),
+          if (!landscape) _SettingsPod(),
+        ],
+      );
     } else {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -155,11 +163,10 @@ class _AccountScreenState extends State<AccountScreen>
   // ── Действия ───────────────────────────────────────────────────────────────
 
   /// Контент правой панели в ландшафте: вкладка [i] — отдельный «экран».
-  /// Когда пользователь не вошёл, обе вкладки показывают под логина.
+  /// Вкладка Account: под логина у гостя, профиль у вошедшего. Settings —
+  /// один и тот же под, аккаунт не нужен.
   Widget _pane(bool landscape, Widget loggedOutOrLoading) {
-    final vm = context.read<NgViewModel>();
-    final user = vm.currentUser;
-    if (_idx == 0 || user == null) {
+    if (_idx == 0) {
       return SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(6, 8, 6, 12),
         child: Column(
@@ -168,6 +175,7 @@ class _AccountScreenState extends State<AccountScreen>
         ),
       );
     }
+    // Вкладка Settings: у вошедшего и у гостя — один и тот же под.
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(6, 8, 6, 12),
       child: Column(
