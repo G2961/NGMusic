@@ -1076,12 +1076,17 @@ class NgTrackIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Декодим сразу в целевой размер (×dpr): полноразмерные _full.webp
+    // (500×500+) на каждую строку списка — главный тормоз скролла.
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    final cachePx = (size * dpr).round();
     final img = Image.network(
       url,
       width: size,
       height: size,
       fit: BoxFit.cover,
       gaplessPlayback: true,
+      cacheWidth: cachePx,
       errorBuilder: (_, __, ___) => Image.asset(
         NgTex.defaultAudioIcon,
         width: size,

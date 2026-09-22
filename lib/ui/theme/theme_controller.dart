@@ -25,6 +25,9 @@ extension NgDesignX on NgDesign {
         NgDesign.classic => 'Textured pods, golden inputs, Pakenham.',
         NgDesign.modern => 'Flat dark panels, Arial, star votebar.',
       };
+
+  /// Превью-картинка для свитчера в настройках (assets/ngmusic_theme-previews).
+  String get previewAsset => 'assets/ngmusic_theme-previews/${name}.png';
 }
 
 /// Набор значений одной темы. Поля соответствуют топ-левел геттерам

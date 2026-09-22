@@ -47,10 +47,19 @@ class _HubScreenState extends State<HubScreen>
   /// 0 — полностью видна, 1 — полностью спрятана. Жёстко привязана к скроллу:
   /// скорость съезда равна скорости пальца, а после жеста авто-доезжает
   /// до ближайшего конца.
-  double _searchProgress = 0;
+  ///
+  /// Живёт в ValueNotifier, а не в setState: на каждый тик скролла
+  /// перестраивается ТОЛЬКО плашка (ValueListenableBuilder), а не весь
+  /// хаб с TabBarView — иначе лист списков дёргался на каждый пиксель.
+  final ValueNotifier<double> _searchProgress = ValueNotifier(0);
 
-  /// Доводчик прогресса после жеста (null — не работает).
+  /// Доводчик прогресса после жеста. Один долгоживущий контроллер с одним
+  /// тик-листенером: пересоздание на каждый жест давало рывки, dispose
+  /// в колбэке и накопление листенеров.
   AnimationController? _searchAnim;
+
+  /// Куда доводить (начало/конец); null — доводчик не активен.
+  Tween<double>? _searchTween;
 
   /// Высота строки поиска (плашка едет на эту величину за прогресс 0→1).
   static const _searchBarH = 42.0;
@@ -111,6 +120,7 @@ class _HubScreenState extends State<HubScreen>
     _tab.removeListener(_onTabChanged);
     _tab.dispose();
     _searchAnim?.dispose();
+    _searchProgress.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -185,33 +195,37 @@ class _HubScreenState extends State<HubScreen>
                       if (!landscape)
                         // Плашка поиска едет 1:1 со скроллом (см.
                         // _onScrollNotification): высота сжимается, контент
-                        // уезжает вверх, не пересоздаваясь.
-                        SizedBox(
-                          height: _searchBarH * (1 - _searchProgress),
-                          child: ClipRect(
-                            child: OverflowBox(
-                              alignment: Alignment.topLeft,
-                              maxHeight: _searchBarH,
-                              child: Row(
-                                children: [
-                                  // Гамбургер: открывает сайдбар жанров.
-                                  NgIconButton(
-                                    icon: 'menu',
-                                    padding: 10,
-                                    tooltip: 'Browse genres',
-                                    onTap: () =>
-                                        setState(() => _menuOpen = !_menuOpen),
-                                  ),
-                                  Expanded(
-                                    child: NgSearchBar(
-                                      controller: _searchCtrl,
-                                      focusNode: _searchFocus,
-                                      searching: vm.isInSearch,
-                                      onSubmit: _onSearch,
-                                      onClear: () => _onSearch(''),
+                        // уезжает вверх, не пересоздаваясь. Ребилдится только
+                        // она (ValueListenableBuilder), не весь хаб.
+                        ValueListenableBuilder<double>(
+                          valueListenable: _searchProgress,
+                          builder: (_, progress, __) => SizedBox(
+                            height: _searchBarH * (1 - progress),
+                            child: ClipRect(
+                              child: OverflowBox(
+                                alignment: Alignment.topLeft,
+                                maxHeight: _searchBarH,
+                                child: Row(
+                                  children: [
+                                    // Гамбургер: открывает сайдбар жанров.
+                                    NgIconButton(
+                                      icon: 'menu',
+                                      padding: 10,
+                                      tooltip: 'Browse genres',
+                                      onTap: () => setState(
+                                          () => _menuOpen = !_menuOpen),
                                     ),
-                                  ),
-                                ],
+                                    Expanded(
+                                      child: NgSearchBar(
+                                        controller: _searchCtrl,
+                                        focusNode: _searchFocus,
+                                        searching: vm.isInSearch,
+                                        onSubmit: _onSearch,
+                                        onClear: () => _onSearch(''),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -352,20 +366,20 @@ class _HubScreenState extends State<HubScreen>
       // Живой жест всегда сильнее доводчика.
       if (delta != 0 && _searchAnim != null) {
         _searchAnim!.stop();
-        _searchAnim!.dispose();
         _searchAnim = null;
       }
-      final next = (_searchProgress + delta / _searchBarH).clamp(0.0, 1.0);
-      if (next != _searchProgress) {
-        setState(() => _searchProgress = next);
+      final next =
+          (_searchProgress.value + delta / _searchBarH).clamp(0.0, 1.0);
+      if (next != _searchProgress.value) {
+        _searchProgress.value = next;
       }
     } else if (n is ScrollEndNotification) {
       if (n.metrics.pixels <= 0) {
         // Вернулись в начало списка — строка возвращается целиком.
         _animateSearchTo(0);
-      } else if (_searchProgress > 0 && _searchProgress < 1) {
+      } else if (_searchProgress.value > 0 && _searchProgress.value < 1) {
         // Куда доезжать, решает прогресс.
-        _animateSearchTo(_searchProgress >= 0.5 ? 1 : 0);
+        _animateSearchTo(_searchProgress.value >= 0.5 ? 1 : 0);
       }
     }
     return false;
@@ -377,23 +391,21 @@ class _HubScreenState extends State<HubScreen>
     double target, {
     Duration duration = const Duration(milliseconds: 220),
   }) {
-    if (_searchProgress == target) return;
-    _searchAnim?.stop();
-    _searchAnim?.dispose();
-    final ctrl = AnimationController(vsync: this, value: _searchProgress, duration: duration);
-    _searchAnim = ctrl;
-    final anim = CurvedAnimation(parent: ctrl, curve: Curves.easeOutCubic);
-    final tween = Tween(begin: _searchProgress, end: target);
-    ctrl.addListener(() {
-      if (mounted) setState(() => _searchProgress = tween.evaluate(anim));
-    });
-    ctrl.addStatusListener((s) {
-      if (s == AnimationStatus.completed) {
-        _searchAnim?.dispose();
-        _searchAnim = null;
-      }
-    });
-    ctrl.forward();
+    if (_searchProgress.value == target) return;
+    final ctrl = _searchAnim ??= AnimationController(vsync: this);
+    ctrl.duration = duration;
+    _searchTween = Tween(begin: _searchProgress.value, end: target);
+    ctrl
+      ..clearListeners()
+      ..addListener(_onSearchAnimTick)
+      ..forward(from: 0);
+  }
+
+  void _onSearchAnimTick() {
+    final t = _searchTween;
+    if (t == null || _searchAnim == null) return;
+    final curved = Curves.easeOutCubic.transform(_searchAnim!.value);
+    _searchProgress.value = t.begin! + (t.end! - t.begin!) * curved;
   }
 
   void _onUserTap(NgViewModel vm) {

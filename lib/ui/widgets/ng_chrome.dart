@@ -342,6 +342,8 @@ class _Avatar extends StatelessWidget {
           : Image.network(
               url!,
               fit: BoxFit.cover,
+              // Аватарка 30px — не декодим полноразмерный исходник.
+              cacheWidth: (30 * (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0)).round(),
               errorBuilder: (_, __, ___) =>
                   Image.asset(NgTex.h2('user'), width: 20, height: 20),
             ),

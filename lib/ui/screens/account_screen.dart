@@ -434,6 +434,95 @@ class _SquareAvatar extends StatelessWidget {
 
 // ── Настройки ────────────────────────────────────────────────────────────────
 
+/// Карточка темы в Settings: скриншот-превью сверху (assets/ngmusic_theme-
+/// previews), под ним подпись и галка выбранности. Клик по всей карточке
+/// переключает тему. Использует ту же зебру/рамки, что и строки списков.
+class _ThemeCard extends StatelessWidget {
+  final NgDesign mode;
+  final int index;
+  final bool selected;
+  final VoidCallback onSelect;
+
+  const _ThemeCard({
+    required this.mode,
+    required this.index,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(11, 0, 11, 8),
+      child: Material(
+        color: selected ? ngRowAlt : ngBlack,
+        child: InkWell(
+          onTap: selected ? null : onSelect,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.fromBorderSide(BorderSide(
+                color: selected ? ngGold : ngPodBorder,
+                width: selected ? 2 : 1,
+              )),
+            ),
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Превью: фиксированная высота, ширина тянется, кроп сверху
+                // (скриншоты выше, чем нужно карточке).
+                SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.hardEdge,
+                    child: Image.asset(
+                      mode.previewAsset,
+                      width: 400,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        mode.label,
+                        style: selected
+                            ? ngLink.copyWith(color: ngWhite)
+                            : ngLink,
+                      ),
+                    ),
+                    if (selected)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Active', style: ngLabel.copyWith(color: ngGold)),
+                          const SizedBox(width: 4),
+                          Image.asset(NgTex.a15('check'),
+                              width: 12, height: 12,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox(width: 12, height: 12)),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(mode.hint, style: ngLabel),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsPod extends StatelessWidget {
   const _SettingsPod();
 
@@ -467,10 +556,9 @@ class _SettingsPod extends StatelessWidget {
             ),
           ),
           for (final mode in NgDesign.values)
-            _OptionRow(
+            _ThemeCard(
+              mode: mode,
               index: NgDesign.values.indexOf(mode),
-              label: mode.label,
-              hint: mode.hint,
               selected: themeCtl.mode == mode,
               onSelect: () => themeCtl.setMode(mode),
             ),
