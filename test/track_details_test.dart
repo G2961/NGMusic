@@ -138,6 +138,19 @@ void main() {
     expect(t.descriptionHtml, isNotNull);
   });
 
+  test('мой голос парсится из checked-радио votebar-а', () {
+    final html = File('test/fixtures/listen_voted.html').readAsStringSync();
+    final repo = NgRepository();
+
+    // На этой странице голос стоит: сервер отрендерил checked на 10 (5 звёзд).
+    expect(repo.parseMyVote(html), 10);
+
+    // Страница без голоса: checked нет → null, кэш не трогаем.
+    final noVote =
+        File('test/fixtures/listen_1572356.html').readAsStringSync();
+    expect(repo.parseMyVote(noVote), isNull);
+  });
+
   test('обложка отдаётся кандидатами от _raw.png к превью', () {
     final track = _legacy()
       ..iconUrl = 'https://aicon.ngfiles.com/1572/1572356_medium.webp?f1';

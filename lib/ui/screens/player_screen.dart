@@ -1386,19 +1386,23 @@ class _ReviewsPodState extends State<_ReviewsPod> {
     // логическая страница 1 (старейшие) = последняя страница NG, развёрнутая.
     final known = _page?.pages ?? 1;
     final fetchPage = _asc ? (known - _pageNum + 1).clamp(1, known) : _pageNum;
-    // Свой отзыв и голос тянем параллельно со списком чужих.
+    // Свой отзыв (он же синхронизирует голос из votebar-а страницы в
+    // кэш) и список чужих — параллельно. Голос читаем из кэша ПОСЛЕ:
+    // он только что обновился значением с сайта, второй запрос не нужен.
+    final trackId = widget.track.id;
     final results = await Future.wait([
-      _repo.getReviews(widget.track.id, sort: _sort, page: fetchPage),
-      _repo.getMyReview(widget.track.id),
-      NgAuth.getMyVote(widget.track.id),
+      _repo.getReviews(trackId, sort: _sort, page: fetchPage),
+      _repo.getMyReview(trackId),
     ]);
+    if (!mounted) return;
+    final vote = await NgAuth.getMyVote(trackId);
     if (!mounted) return;
     setState(() {
       _loading = false;
       _page = results[0] as ReviewsPage?;
       _error = _page == null ? 'Could not load reviews' : null;
       _myReview = results[1] as NgReview?;
-      _myVote = results[2] as int?;
+      _myVote = vote;
     });
   }
 
