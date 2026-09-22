@@ -1,7 +1,6 @@
 # NGMusic
 
-Мобильный плеер для [Newgrounds Audio Portal](https://www.newgrounds.com/audio) — неофициальный клиент с ретро-дизайном в духе классического NG (панели 2015, votebar со Стивом и спрайтами 2024).
-
+Мобильный плеер для [Newgrounds Audio Portal](https://www.newgrounds.com/audio) — неофициальный клиент, имеющий выбор между темами — Classic и Modern.
 ## Что умеет
 
 - **Каталог и поиск** — хабы (Featured, Best / Weekly / Daily / Monthly, Genres), поиск по трекам с подгрузкой страниц при скролле
