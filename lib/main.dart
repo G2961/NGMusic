@@ -64,9 +64,15 @@ class NgMusicApp extends StatelessWidget {
           // Impeller/Vulkan после поворота давал чёрный кадр — убрано.
           scrollBehavior: const NoStretchScrollBehavior(),
           theme: ngTheme,
-          // Ключ по теме заставляет ПЕРЕМОНТИРОВАТЬ дерево (не просто
-          // перестроить): const-поддеревья внутри экранов иначе скипаются
-          // (identical-виджеты), и тема «доезжает» только после поворота.
+          // Перекраска мгновенно: дефолтные 200мс AnimatedTheme выглядели
+          // как «задержку» при смене дизайна.
+          themeAnimationDuration: Duration.zero,
+          // Классический «перезапуск» при смене темы: ключ по режиму
+          // перемонтирует _RootShellState — всё дерево строится с нуля
+          // уже в новой теме (никаких ленивых доездов и артефактов).
+          // Цена: навигация сбрасывается на главный экран — осознанно,
+          // надёжность важнее. Провайдеры живут над MaterialApp:
+          // логин, плейлисты и аудио-плеер не страдают.
           home: KeyedSubtree(
             key: ValueKey('shell-${themeCtl.mode.name}'),
             child: const _RootShell(),
