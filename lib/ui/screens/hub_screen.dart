@@ -808,7 +808,7 @@ class _TrackRow extends StatelessWidget {
       genre: track.genre,
       artist: track.artist,
       playing: isActive,
-      paused: isActive && !vm.isPlaying,
+      onIconTap: () => vm.playTrack(track),
       onTap: () {
         // Очередь = список на экране в момент тапа (не «активная вкладка»
         // VM — та расползается с UI после пересозданий хаба).

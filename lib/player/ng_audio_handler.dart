@@ -31,6 +31,12 @@ class NgAudioHandler {
   final _durationCtrl    = StreamController<Duration?>.broadcast();
   final _processingCtrl  = StreamController<NgProcessingState>.broadcast();
 
+  /// Счётчик запусков: события от прошлого трека (хвост позиции, готовая
+  /// длительность) не должны подменять состояние нового — из-за этого
+  /// таймлайн «скакал» и прыгал на чужое время.
+  int _epoch = 0;
+  int _durationEpoch = 0;
+
   Stream<bool>               get playingStream      => _playingCtrl.stream;
   Stream<Duration>           get positionStream     => _positionCtrl.stream;
   Stream<Duration?>          get durationStream     => _durationCtrl.stream;
@@ -51,10 +57,21 @@ class NgAudioHandler {
         _isPlaying = value as bool;
         _playingCtrl.add(_isPlaying);
       case 'position':
-        _position = Duration(milliseconds: (value as num).toInt());
+        final pos = Duration(milliseconds: (value as num).toInt());
+        // Отрицательные/нелогичные значения — мусор от нативного плеера.
+        if (pos < Duration.zero) return;
+        if (_duration != null && _duration! > Duration.zero && pos > _duration!) {
+          return;
+        }
+        _position = pos;
         _positionCtrl.add(_position);
       case 'duration':
-        _duration = Duration(milliseconds: (value as num).toInt());
+        final durMs = (value as num).toInt();
+        // Длительность валидна только из текущей эпохи и только положительная:
+        // ноль/мусор не должен затирать известное значение.
+        if (durMs <= 0 || _durationEpoch == _epoch) return;
+        _durationEpoch = _epoch;
+        _duration = Duration(milliseconds: durMs);
         _durationCtrl.add(_duration);
       case 'state':
         _processingState = _parseState(value as String);
@@ -78,10 +95,14 @@ class NgAudioHandler {
     String artist = '',
     Uri? artworkUri,
   }) async {
+    _epoch++;
     _duration = null;
     _position = Duration.zero;
+    _durationEpoch = 0;
     _processingState = NgProcessingState.loading;
     _processingCtrl.add(_processingState);
+    _positionCtrl.add(_position);
+    _durationCtrl.add(null);
     await _method.invokeMethod<void>('play', {
       'url': url,
       'title': title,

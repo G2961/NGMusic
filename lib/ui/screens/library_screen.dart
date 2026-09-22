@@ -477,7 +477,7 @@ class _FavoriteRow extends StatelessWidget {
       genre: favorite.genre ?? '',
       artist: favorite.artist,
       playing: isActive,
-      paused: isActive && !vm.isPlaying,
+      onIconTap: () => vm.playTrack(track),
       onTap: () {
         vm.setQueueContext(queue.map(LocalDb.favoriteToTrack).toList());
         vm.playTrack(track);

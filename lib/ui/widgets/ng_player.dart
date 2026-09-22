@@ -353,10 +353,20 @@ class NgSeekBar extends StatefulWidget {
   State<NgSeekBar> createState() => _NgSeekBarState();
 }
 
-class _NgSeekBarState extends State<NgSeekBar>
-    with SingleTickerProviderStateMixin {
+class _NgSeekBarState extends State<NgSeekBar> with TickerProviderStateMixin {
   double? _drag;
   double _width = 1;
+
+  /// Плавно догоняет целевое значение: сырые тики позиции приходят неровно
+  /// (буферизация, garbage-тик, пропуск), из-за этого полоса «дёргалась».
+  late final AnimationController _smooth = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 450),
+  );
+  late final Animation<double> _smoothCurved =
+      CurvedAnimation(parent: _smooth, curve: Curves.linear);
+  double _from = 0;
+  double _to = 0;
 
   late final AnimationController _run = AnimationController(
     vsync: this,
@@ -367,12 +377,39 @@ class _NgSeekBarState extends State<NgSeekBar>
   void didUpdateWidget(NgSeekBar old) {
     super.didUpdateWidget(old);
     _syncRunner();
+    _syncSmooth();
   }
 
   @override
   void initState() {
     super.initState();
     _syncRunner();
+    _smooth.value = 0;
+    _to = 0;
+  }
+
+  void _syncSmooth() {
+    if (_drag != null) return;
+    final target = widget.value.clamp(0.0, 1.0);
+    if ((target - _to).abs() < 0.0005) return;
+    // Резкое изменение (>15%) без смены трека — мусорный тик, глотаем.
+    if ((target - _to).abs() > 0.15 && _to > 0) {
+      return;
+    }
+    _from = _smooth.value;
+    _to = target;
+    _smooth
+      ..reset()
+      ..forward();
+  }
+
+  double get _displayValue {
+    if (_drag != null) return _drag!;
+    if (widget.value <= 0) return 0;
+    // Между анимациями показываем последний target, не промежуточное значение.
+    return _smooth.isAnimating
+        ? _from + (_to - _from) * _smoothCurved.value
+        : _to;
   }
 
   void _syncRunner() {
@@ -386,6 +423,7 @@ class _NgSeekBarState extends State<NgSeekBar>
   @override
   void dispose() {
     _run.dispose();
+    _smooth.dispose();
     super.dispose();
   }
 
@@ -412,7 +450,7 @@ class _NgSeekBarState extends State<NgSeekBar>
               ),
             )
           : NgStripedSeek(
-              value: _drag ?? widget.value,
+              value: _displayValue,
               height: widget.height,
               knob: _drag != null,
             );

@@ -1776,6 +1776,13 @@ class NgRepository {
       }
 
       final tags = <String>{};
+      // Формат 2026: search/conduct/audio?match=tags&tags=…
+      for (final a in doc.querySelectorAll('a[href*="match=tags"]')) {
+        final v = Uri.tryParse(a.attributes['href'] ?? '')
+            ?.queryParameters['tags'];
+        if (v != null && v.isNotEmpty) tags.add(v);
+      }
+      // Старый формат: /audio/browse/tag/{tag}
       for (final a in doc.querySelectorAll('a[href*="/audio/browse/tag/"]')) {
         final m = RegExp(r'/audio/browse/tag/([a-z0-9\-]+)')
             .firstMatch(a.attributes['href'] ?? '');

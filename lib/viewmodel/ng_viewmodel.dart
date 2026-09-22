@@ -320,6 +320,13 @@ class NgViewModel extends ChangeNotifier {
   int _playGen = 0;
 
   Future<void> playTrack(Track track) async {
+    // Тот же трек — продолжаем играть (перезапуск только по явному seek/next).
+    if (currentTrack?.id == track.id &&
+        !isLoadingTrack &&
+        audioHandler.isPlaying) {
+      notifyListeners();
+      return;
+    }
     final gen = ++_playGen;
     currentTrack = track;
     isLoadingTrack = true;

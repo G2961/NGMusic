@@ -85,6 +85,8 @@ class PlaybackBridge(private val context: Context, messenger: BinaryMessenger) {
                 "seek"      -> {
                     val pos = call.argument<Number>("position")?.toLong() ?: 0L
                     controller?.seekTo(pos)
+                    // Мгновенный отклик в UI — не ждём ближайшего тика опроса.
+                    emit(mapOf("type" to "position", "value" to pos))
                     result.success(null)
                 }
                 "getPosition" -> result.success(controller?.currentPosition ?: 0L)
@@ -98,6 +100,9 @@ class PlaybackBridge(private val context: Context, messenger: BinaryMessenger) {
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
             try {
+                // Старый контроллер больше не должен слать события — иначе два
+                // источника позиций дерутся и таймлайн в UI скачет.
+                controller?.removeListener(playerListener)
                 controller = future.get()
                 controller?.addListener(playerListener)
             } catch (_: Exception) {}
@@ -105,6 +110,11 @@ class PlaybackBridge(private val context: Context, messenger: BinaryMessenger) {
     }
 
     private fun play(url: String, title: String, artist: String, artworkUri: String?) {
+        // Сбрасываем UI до старта: без этого на новом треке пару секунд
+        // живут позиция/длительность предыдущего — таймлайн «скачет».
+        stopPositionUpdates()
+        emit(mapOf("type" to "duration", "value" to 0L))
+        emit(mapOf("type" to "position", "value" to 0L))
         val meta = MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(artist)
@@ -119,19 +129,25 @@ class PlaybackBridge(private val context: Context, messenger: BinaryMessenger) {
             prepare()
             play()
         }
+        // Если играли и переключили трек — onIsPlayingChanged не стрельнет,
+        // перезапускаем опрос позиции вручную.
+        startPositionUpdates()
     }
 
     private fun startPositionUpdates() {
         stopPositionUpdates()
         val r = object : Runnable {
             override fun run() {
-                val pos = controller?.currentPosition ?: 0L
-                emit(mapOf("type" to "position", "value" to pos))
+                val c = controller
+                // В буферизации/паузе currentPosition врёт — молчим.
+                if (c?.isPlaying == true) {
+                    emit(mapOf("type" to "position", "value" to c.currentPosition))
+                }
                 mainHandler.postDelayed(this, 500)
             }
         }
         positionRunnable = r
-        mainHandler.postDelayed(r, 500)
+        r.run()
     }
 
     private fun stopPositionUpdates() {

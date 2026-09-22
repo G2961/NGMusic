@@ -94,6 +94,34 @@ void main() {
     expect(track.tags, ['8bit', 'chiptune']);
   });
 
+  test('теги 2026: search/conduct/audio?match=tags разбираются', () {
+    final track = _blank();
+    NgRepository().parseListenDetails(track, '''
+      <dl class="sidestats flex-1">
+        <dt class="tags">Tags</dt>
+        <dd class="tags">
+          <ul>
+            <li><a href="https://www.newgrounds.com/search/conduct/audio?match=tags&amp;tags=classical">classical</a></li>
+            <li><a href="https://www.newgrounds.com/search/conduct/audio?match=tags&amp;tags=orchestral">orchestral</a></li>
+          </ul>
+        </dd>
+      </dl>
+    ''');
+
+    expect(track.tags, ['classical', 'orchestral']);
+  });
+
+  test('теги со сохранённой страницы Holy Knight Yusto', () {
+    final html =
+        File('test/fixtures/listen_yusto.html').readAsStringSync();
+    final track = _blank();
+
+    NgRepository().parseListenDetails(track, html);
+
+    expect(track.tags, contains('classical'));
+    expect(track.tags, contains('orchestral'));
+  });
+
   test('Author Comments: HTML с картинками сохраняется вместе с текстом', () {
     final html =
         File('test/fixtures/listen_1572356.html').readAsStringSync();
