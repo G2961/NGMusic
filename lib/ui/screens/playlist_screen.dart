@@ -190,7 +190,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   void _snack(String text, {bool ok = true}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+      content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ok ? ngOrange : ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),
@@ -221,7 +221,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),
@@ -391,7 +391,7 @@ class _RenameDialogState extends State<_RenameDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Playlist name', style: ngLabel),
+            Text('Playlist name', style: ngLabel),
             const SizedBox(height: 5),
             NgTextField(
               controller: _ctrl,
@@ -444,7 +444,7 @@ class _ConfirmDeleteDialog extends StatelessWidget {
             Text('«$name» will be permanently deleted.', style: ngBody),
             if (onNewgrounds) ...[
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'This playlist lives on your Newgrounds account — '
                 'it will be deleted there too.',
                 style: ngBodySmall,

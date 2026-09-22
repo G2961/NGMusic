@@ -73,7 +73,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         context.read<LibraryViewModel>().clearError();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content:
-              Text(error, style: const TextStyle(color: ngWhite, fontSize: 12)),
+              Text(error, style: TextStyle(color: ngWhite, fontSize: 12)),
           backgroundColor: ngRed,
           behavior: SnackBarBehavior.floating,
           shape: const RoundedRectangleBorder(),

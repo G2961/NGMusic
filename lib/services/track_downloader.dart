@@ -127,9 +127,9 @@ class TrackDownloader {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: cSurface2,
-        title: const Text('Нужно разрешение',
+        title: Text('Нужно разрешение',
             style: TextStyle(color: cTextPri, fontSize: 17)),
-        content: const Text(
+        content: Text(
           'Чтобы сохранять треки в папку Downloads, дай приложению доступ '
           '«Управление всеми файлами» в настройках.',
           style: TextStyle(color: cTextSec, fontSize: 14),
@@ -137,11 +137,11 @@ class TrackDownloader {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена', style: TextStyle(color: cTextDim)),
+            child: Text('Отмена', style: TextStyle(color: cTextDim)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Открыть настройки',
+            child: Text('Открыть настройки',
                 style: TextStyle(color: cAccent)),
           ),
         ],

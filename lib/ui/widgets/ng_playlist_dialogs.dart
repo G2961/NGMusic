@@ -97,7 +97,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Playlist name', style: ngLabel),
+            Text('Playlist name', style: ngLabel),
             const SizedBox(height: 5),
             NgTextField(
               controller: _ctrl,
@@ -106,7 +106,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
               onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 12),
-            const Text('Where to create', style: ngLabel),
+            Text('Where to create', style: ngLabel),
             const SizedBox(height: 5),
             NgTargetRow(
               icon: 'folder',

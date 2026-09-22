@@ -211,7 +211,7 @@ class _AccountScreenState extends State<AccountScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Are you sure you want to log out?', style: ngBody),
+              Text('Are you sure you want to log out?', style: ngBody),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -421,7 +421,7 @@ class _SquareAvatar extends StatelessWidget {
     return Container(
       width: _size,
       height: _size,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: ngBrown)),
       ),
@@ -452,8 +452,31 @@ class _SettingsPod extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(11, 2, 11, 10),
+          Padding(
+            padding: EdgeInsets.fromLTRB(11, 2, 11, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Design', style: ngH3),
+                SizedBox(height: 4),
+                Text(
+                  'Switch between the classic 2015 look and the modern one.',
+                  style: ngBodySmall,
+                ),
+              ],
+            ),
+          ),
+          for (final mode in NgDesign.values)
+            _OptionRow(
+              index: NgDesign.values.indexOf(mode),
+              label: mode.label,
+              hint: mode.hint,
+              selected: themeCtl.mode == mode,
+              onSelect: () => themeCtl.setMode(mode),
+            ),
+          // Заголовок второй секции — той же подложкой, что и первая.
+          Padding(
+            padding: EdgeInsets.fromLTRB(11, 10, 11, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

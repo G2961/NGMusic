@@ -214,7 +214,7 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
 
   void _snack(BuildContext context, String text, {bool ok = true}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+      content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ok ? ngOrange : ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),

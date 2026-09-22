@@ -226,7 +226,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const NgLoading(width: 140),
                   if (_extracting)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.only(bottom: 12),
                       child: Text('Reading your account page…', style: ngLabel),
                     ),
@@ -265,7 +265,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),

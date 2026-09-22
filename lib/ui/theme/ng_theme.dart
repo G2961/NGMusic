@@ -1,52 +1,59 @@
 import 'package:flutter/material.dart';
 
-/// Палитра и формы Newgrounds 2024 (снимки web.archive в assets/ng2024).
+import 'theme_controller.dart';
+
+export 'theme_controller.dart';
+
+/// Палитра и формы Newgrounds — две дизайн-эпохи на выбор:
+/// классический 2015 (текстуры, Pakenham) и современный 2024 (плоский
+/// тёмный, Arial). Все цвета раздаются через топ-левел геттеры
+/// (`ngGold`, `ngPodBg`, …) поверх [ThemeController.palette] — при смене
+/// темы в Settings весь UI перекрашивается без перезапуска.
 ///
-/// Все значения — из декодированного `ng2024.css` (см. build/ng2024_readable),
-/// в комментариях исходный селектор. Формулы то же, что в 2015-теме,
-/// поэтому весь старый код компилируется без переименований: редизайн
-/// идёт заменой значений, а не переписыванием экранов.
-// ── Базовые цвета ─────────────────────────────────────────────────────────────
+/// Значения 2015 — из `ng_publish.css` архива 2015 года; значения 2024 —
+/// из декодированного `ng2024.css`. В комментариях исходный селектор.
 
-const ngBlack = Color(0xFF000000); // body { background-color: rgb(0,0,0) }
-const ngPodBg = Color(0xFF0F0B0C); // div.pod-body { background-color: rgb(15,11,12) }
-const ngPodBorder = Color(0xFF000000); // div.pod-body { border: 1px solid #000 }
-const ngPodBotBorder = Color(0xFF282B30); // ножка пода — тон грани按钮
-const ngRowAlt = Color(0xFF191315); // чередование строк itemlist
-const ngMainCol = Color(0xFF0F0B0C); // фон колонки = фон пода 2024
+// ── Базовые цвета (геттеры над активной палитрой) ────────────────────────────
 
-const ngGold = Color(0xFFFDA238); // ссылки/кнопки: rgb(253,162,56)
-const ngText = Color(0xFFC9BEBE); // body color: rgb(201,190,190)
-const ngWhite = Color(0xFFFFFFFF);
-const ngDim = Color(0xFF7D7575); // span.detail-title: rgb(125,117,117)
-const ngDimmer = Color(0xFF5A5454); // border-left meta: rgb(90,84,84)
-const ngInk = Color(0xFF0F0B0C); // текст на оранжевом фоне
-const ngHairline = Color(0xFF282B30); // button border: rgb(40,43,48)
+Color get ngBlack => themeCtl.palette.black; // body
+Color get ngPodBg => themeCtl.palette.podBg; // div.pod-body
+Color get ngPodBorder => themeCtl.palette.podBorder; // рамка пода
+Color get ngPodBotBorder => themeCtl.palette.podBotBorder; // div.podbot
+Color get ngRowAlt => themeCtl.palette.rowAlt; // tr.alt
+Color get ngMainCol => themeCtl.palette.mainCol; // колонка страницы
 
-const ngBrown = Color(0xFF34393D); // pod-head градиент, средний тон
-const ngBrownMid = Color(0xFF4E575E); // pod-head градиент, верхний тон
-const ngOrange = Color(0xFFFDA238);
-const ngOrangeDeep = Color(0xFF9D4F18);
-const ngRed = Color(0xFFF62F36); // movies-акцент: rgb(246,47,54)
-const ngGreen = Color(0xFF47B32A); // audio-акцент: rgb(71,179,42)
-const ngPodGreen = Color(0xFF191919); // плоский тёмный (скины 2024 не текстурные)
-const ngRowAltGreen = Color(0xFF16181A);
+Color get ngGold => themeCtl.palette.gold; // цвет ссылок NG
+Color get ngText => themeCtl.palette.text; // body color
+Color get ngWhite => themeCtl.palette.white;
+Color get ngDim => themeCtl.palette.dim; // h5, th, .pagenav
+Color get ngDimmer => themeCtl.palette.dimmer; // blockquote
+Color get ngInk => themeCtl.palette.ink; // текст на золотом фоне
+Color get ngHairline => themeCtl.palette.hairline; // тонкие границы
 
-// ── Плеер (страница трека 2024: waveform + кнопки) ───────────────────────────
+Color get ngBrown => themeCtl.palette.brown; // podtop (gold skin)
+Color get ngBrownMid => themeCtl.palette.brownMid; // .pagenav a>span
+Color get ngOrange => themeCtl.palette.orange;
+Color get ngOrangeDeep => themeCtl.palette.orangeDeep;
+Color get ngRed => themeCtl.palette.red; // .remove
+Color get ngGreen => themeCtl.palette.green; // green skin accent
+Color get ngPodGreen => themeCtl.palette.podGreen; // body.green div.podtop
+Color get ngRowAltGreen => themeCtl.palette.rowAltGreen;
 
-const ngPlayerYellow = Color(0xFFFDA238); // акцент плеера — золотой NG 2024 (был зелёный #67D539)
-const ngPlayerStripe = Color(0xFF1E2422);
-const ngPlayerBarTop = Color(0xFF1A1618);
-const ngPlayerBarBot = Color(0xFF0F0B0C);
-const ngSeekBorder = Color(0xFF282B30);
-const ngVizTop = Color(0xFF16211A);
-const ngVizMid = Color(0xFF101812);
-const ngVizBot = Color(0xFF0A0810);
+// ── Плеер ────────────────────────────────────────────────────────────────────
+
+Color get ngPlayerYellow => themeCtl.palette.playerYellow;
+Color get ngPlayerStripe => themeCtl.palette.playerStripe;
+Color get ngPlayerBarTop => themeCtl.palette.playerBarTop;
+Color get ngPlayerBarBot => themeCtl.palette.playerBarBot;
+Color get ngSeekBorder => themeCtl.palette.seekBorder;
+Color get ngVizTop => themeCtl.palette.vizTop;
+Color get ngVizMid => themeCtl.palette.vizMid;
+Color get ngVizBot => themeCtl.palette.vizBot;
 
 // ── Пути к текстурам ─────────────────────────────────────────────────────────
 
 class NgTex {
-  // Текстуры 2015 оставлены: где 2024 плоский, они не используются.
+  // Текстуры 2015: активны в классической теме, в современной не используются.
   static const podtopGold = 'assets/ng2015/tex/podtop-gold.jpg';
   static const podtopGreen = 'assets/ng2015/tex/podtop-green.jpg';
   static const podtopBlue = 'assets/ng2015/tex/podtop-blue.jpg';
@@ -79,6 +86,9 @@ class NgTex {
 
   static const trophies = 'assets/ng2015/ul-trophies.png';
 
+  /// Лица votebar 2015 (зелёный скин аудио-портала), спрайт 300×230.
+  static const voteFaces = 'assets/ng2015/vp/vote-darn.png';
+
   /// Звёзды рейтинга 2024 — спрайт 36×72 (пустые сверху, залитые снизу).
   static const starScore2024 = 'assets/ng2024/sprites/star-score.webp';
 
@@ -102,148 +112,153 @@ class NgTex {
 
 // ── Типографика ──────────────────────────────────────────────────────────────
 
-/// 2024 использует Arial; Pakenham остаётся только для особых мест.
-const ngHeaderFont = 'Pakenham';
+/// 2015 — Pakenham («headerfont» из CSS 2015), 2024 — Arial.
+String get ngHeaderFont => themeCtl.textured ? 'Pakenham' : 'Arial';
 
-const ngH2 = TextStyle(
-  fontFamily: 'Arial',
-  fontSize: 17,
-  height: 1.2,
-  color: ngWhite,
-  fontWeight: FontWeight.w500,
-);
+TextStyle get ngH2 => themeCtl.textured
+    ? TextStyle(
+        fontFamily: 'Pakenham',
+        fontSize: 22,
+        height: 1.1,
+        color: ngWhite,
+      )
+    : TextStyle(
+        fontFamily: 'Arial',
+        fontSize: 17,
+        height: 1.2,
+        color: ngWhite,
+        fontWeight: FontWeight.w500,
+      );
 
-const ngH3 = TextStyle(
-  fontFamily: 'Arial',
-  fontSize: 14,
-  fontStyle: FontStyle.normal,
-  fontWeight: FontWeight.bold,
-  color: ngWhite,
-);
+TextStyle get ngH3 => themeCtl.textured
+    ? TextStyle(
+        fontFamily: 'Pakenham',
+        fontSize: 14,
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.bold,
+        color: ngWhite,
+      )
+    : TextStyle(
+        fontFamily: 'Arial',
+        fontSize: 14,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.bold,
+        color: ngWhite,
+      );
 
-const ngLink = TextStyle(
-  fontFamily: 'Arial',
-  fontSize: 13,
-  fontWeight: FontWeight.normal,
-  color: ngGold,
-);
+TextStyle get ngLink => themeCtl.textured
+    ? TextStyle(
+        fontFamily: 'Pakenham',
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        color: ngGold,
+      )
+    : TextStyle(
+        fontFamily: 'Arial',
+        fontSize: 13,
+        fontWeight: FontWeight.normal,
+        color: ngGold,
+      );
 
-const ngBody =
-    TextStyle(fontFamily: 'Arial', fontSize: 13, color: ngText);
-const ngBodySmall =
-    TextStyle(fontFamily: 'Arial', fontSize: 12, color: ngText);
-const ngLabel =
-    TextStyle(fontFamily: 'Arial', fontSize: 12, color: ngDim);
+TextStyle get ngBody => themeCtl.textured
+    ? TextStyle(fontFamily: 'Pakenham', fontSize: 12, color: ngText)
+    : TextStyle(fontFamily: 'Arial', fontSize: 13, color: ngText);
+TextStyle get ngBodySmall => themeCtl.textured
+    ? TextStyle(fontFamily: 'Pakenham', fontSize: 11, color: ngText)
+    : TextStyle(fontFamily: 'Arial', fontSize: 12, color: ngText);
+TextStyle get ngLabel => themeCtl.textured
+    ? TextStyle(fontFamily: 'Pakenham', fontSize: 11, color: ngDim)
+    : TextStyle(fontFamily: 'Arial', fontSize: 12, color: ngDim);
 
 // ── Скины подов ──────────────────────────────────────────────────────────────
 
 enum NgSkin { gold, green, blue, red, pink }
 
 extension NgSkinX on NgSkin {
-  // В 2024 шапки подов без текстур — плоский градиент.
+  // 2015: текстурные шапки; 2024: плоский градиент.
   String get podtop => switch (this) {
         NgSkin.gold => NgTex.podtopGold,
-        NgSkin.green => NgTex.podtopGold,
+        NgSkin.green =>
+          themeCtl.textured ? NgTex.podtopGreen : NgTex.podtopGold,
         NgSkin.blue => NgTex.podtopBlue,
         NgSkin.red => NgTex.podtopRed,
         NgSkin.pink => NgTex.podtopPink,
       };
 
-  Color get podtopFill => switch (this) {
-        NgSkin.gold => ngBrown,
-        NgSkin.green => ngBrown,
-        NgSkin.blue => ngBrown,
-        NgSkin.red => ngBrown,
-        NgSkin.pink => ngBrown,
-      };
+  Color get podtopFill => themeCtl.textured
+      ? switch (this) {
+          NgSkin.gold => ngBrown,
+          NgSkin.green => ngPodGreen,
+          NgSkin.blue => const Color(0xFF14283C),
+          NgSkin.red => const Color(0xFF441414),
+          NgSkin.pink => const Color(0xFF3C1428),
+        }
+      : ngBrown; // в 2024 шапки подов одинаковые
 
-  Color get rowAlt => ngRowAlt;
+  Color get rowAlt =>
+      themeCtl.textured && this == NgSkin.green ? ngRowAltGreen : ngRowAlt;
 }
 
 // ── ThemeData ────────────────────────────────────────────────────────────────
 
-final ngTheme = ThemeData(
-  colorScheme: const ColorScheme.dark(
-    primary: ngGold,
-    secondary: ngOrange,
-    surface: ngPodBg,
-    onSurface: ngText,
-    onPrimary: ngInk,
-    error: ngRed,
-  ),
-  scaffoldBackgroundColor: ngBlack,
-  canvasColor: ngBlack,
-  appBarTheme: const AppBarTheme(
-    backgroundColor: ngPodBg,
-    foregroundColor: ngWhite,
-    elevation: 0,
-    centerTitle: false,
-    titleTextStyle: ngH2,
-  ),
-  sliderTheme: SliderThemeData(
-    activeTrackColor: ngPlayerYellow,
-    inactiveTrackColor: ngBlack,
-    thumbColor: ngPlayerYellow,
-    overlayColor: ngPlayerYellow.withValues(alpha: 0.2),
-    trackHeight: 12,
-    trackShape: const RectangularSliderTrackShape(),
-  ),
-  progressIndicatorTheme: const ProgressIndicatorThemeData(
-    color: ngGold,
-    linearTrackColor: ngBlack,
-  ),
-  dividerTheme: const DividerThemeData(color: ngHairline, thickness: 1),
-  textButtonTheme: TextButtonThemeData(
-    style: TextButton.styleFrom(
-      foregroundColor: ngGold,
-      shape: const RoundedRectangleBorder(),
-    ),
-  ),
-  tooltipTheme: const TooltipThemeData(
-    decoration: BoxDecoration(color: ngGold),
-    textStyle: TextStyle(
-        fontFamily: 'Arial', color: ngInk, fontSize: 11),
-  ),
-  useMaterial3: true,
-);
+ThemeData get ngTheme => ThemeData(
+      colorScheme: ColorScheme.dark(
+        primary: ngGold,
+        secondary: ngOrange,
+        surface: ngPodBg,
+        onSurface: ngText,
+        onPrimary: ngInk,
+        error: ngRed,
+      ),
+      scaffoldBackgroundColor: ngBlack,
+      canvasColor: ngBlack,
+      appBarTheme: AppBarTheme(
+        backgroundColor: ngPodBg,
+        foregroundColor: ngWhite,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: ngH2,
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: ngPlayerYellow,
+        inactiveTrackColor: ngBlack,
+        thumbColor: ngPlayerYellow,
+        overlayColor: ngPlayerYellow.withValues(alpha: 0.2),
+        trackHeight: 12,
+        trackShape: const RectangularSliderTrackShape(),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: ngGold,
+        linearTrackColor: ngBlack,
+      ),
+      dividerTheme: DividerThemeData(color: ngHairline, thickness: 1),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: ngGold,
+          shape: const RoundedRectangleBorder(),
+        ),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(color: ngGold),
+        textStyle: TextStyle(
+            fontFamily: ngHeaderFont, color: ngInk, fontSize: 11),
+      ),
+      useMaterial3: true,
+    );
 
 // ── Совместимость со старым кодом ────────────────────────────────────────────
+// (используются в track_downloader.dart — тоже геттеры, чтобы красились)
 
-const cBg = ngBlack;
-const cSurface = ngPodBg;
-const cSurface2 = ngRowAlt;
-const cSurface3 = ngBrown;
-const cPrimary = ngGold;
-const cPrimary2 = ngBrownMid;
-const cAccent = ngOrange;
-const cPink = ngOrange;
-const cTextPri = ngWhite;
-const cTextSec = ngText;
-const cTextDim = ngDim;
-const cDivider = ngHairline;
-const cOnPrimary = ngInk;
-
-const ngBodyBg = ngPodBg;
-const ngBodyText = ngText;
-const ngMuted = ngDim;
-const ngMutedDark = ngDimmer;
-const ngGoldDark = ngBrownMid;
-const ngGoldInput = ngBrown;
-const ngGoldHover = ngWhite;
-const ngOrangeBdr = ngOrange;
-const ngDeep = ngPodBg;
-const ngBgDeep = ngPodBg;
-const ngBgDark = ngBlack;
-const ngBgCard = ngPodBg;
-const ngBgElevated = ngRowAlt;
-const ngBorder = ngHairline;
-const ngBorderLight = ngBrown;
-const ngTextPrimary = ngWhite;
-const ngTextMuted = ngText;
-const ngTextDim = ngDim;
-const ngAudioGreen = ngGreen;
-const ngAudioGreenBg = ngPodGreen;
-const ngAudioGreenBgAlt = ngRowAltGreen;
-const ngAudioGreenLabel = ngPodGreen;
-const ngPodHeadTop = ngBrownMid;
-const ngPodHeadBot = ngBrown;
+Color get cBg => ngBlack;
+Color get cSurface => ngPodBg;
+Color get cSurface2 => ngRowAlt;
+Color get cSurface3 => ngBrown;
+Color get cPrimary => ngGold;
+Color get cPrimary2 => ngBrownMid;
+Color get cAccent => ngOrange;
+Color get cPink => ngOrange;
+Color get cTextPri => ngWhite;
+Color get cTextSec => ngText;
+Color get cTextDim => ngDim;
+Color get cDivider => ngHairline;
+Color get cOnPrimary => ngInk;

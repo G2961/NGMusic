@@ -160,7 +160,7 @@ class _ArtistAudioScreenState extends State<ArtistAudioScreen> {
           children: [
             Container(
               height: 56,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: ngBlack,
                 border: Border(bottom: BorderSide(color: ngHairline)),
               ),

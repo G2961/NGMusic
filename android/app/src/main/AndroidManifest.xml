@@ -48,6 +48,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <!-- Impeller запускаем поверх OpenGL ES вместо Vulkan: на Mali (Pixel 6)
+             при пересоздании поверхности после поворота Vulkan-swapchain умирает
+             и приложение перестаёт выдавать кадры (чёрный экран до следующего
+             GLES-бэкенд обходит этот баг драйвера. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.ImpellerBackend"
+            android:value="opengles"/>
     </application>
 
     <queries>

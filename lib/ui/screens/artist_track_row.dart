@@ -61,7 +61,7 @@ class _ArtistTrackRowState extends State<ArtistTrackRow> {
     lvm.clearError();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? 'Failed to save favorite',
-          style: const TextStyle(color: ngWhite, fontSize: 12)),
+          style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),

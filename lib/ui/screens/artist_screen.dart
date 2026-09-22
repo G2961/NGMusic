@@ -153,7 +153,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               Container(
                 width: 70,
                 height: 70,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: ngBlack,
                   border: Border.fromBorderSide(
                       BorderSide(color: ngBrown, width: 2)),
@@ -351,7 +351,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   void _snack(String text, {bool ok = true}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+      content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ok ? ngOrange : ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),
@@ -370,7 +370,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),
