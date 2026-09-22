@@ -296,7 +296,10 @@ class _PlaylistTrackRow extends StatelessWidget {
       genre: pt.genre ?? '',
       artist: pt.artist,
       playing: isActive,
-      onIconTap: () => vm.playTrack(LocalDb.playlistTrackToTrack(pt)),
+      paused: isActive && !vm.isPlaying,
+      onIconTap: () => isActive
+          ? vm.togglePlayPause()
+          : vm.playTrack(LocalDb.playlistTrackToTrack(pt)),
       onTap: () {
         final tracks = allTracks.map(LocalDb.playlistTrackToTrack).toList();
         vm.setQueueContext(tracks);

@@ -80,7 +80,9 @@ class _ArtistTrackRowState extends State<ArtistTrackRow> {
       // Автора не дублируем — это его собственная страница.
       artist: '',
       playing: isActive,
-      onIconTap: () => vm.playTrack(t),
+      paused: isActive && !vm.isPlaying,
+      onIconTap: () =>
+          isActive ? vm.togglePlayPause() : vm.playTrack(t),
       onTap: () {
         vm.setQueueContext(widget.allTracks);
         vm.playTrack(t);

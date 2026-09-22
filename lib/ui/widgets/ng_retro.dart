@@ -637,13 +637,17 @@ class NgAudioRow extends StatelessWidget {
   /// Тап по строке — играет и открывает полный плеер.
   final VoidCallback? onTap;
 
-  /// Тап по миниатюре — играет без перехода на страницу трека.
+  /// Тап по миниатюре — play/pause текущего трека без перехода на страницу;
+  /// для остальных треков — просто играть без навигации.
   final VoidCallback? onIconTap;
   final VoidCallback? onArtistTap;
   final Widget? trailing;
 
-  /// Текущий трек (подсветка строки).
+  /// Текущий трек (подсветка строки + оверлей play/pause на иконке).
   final bool playing;
+
+  /// Текущий трек на паузе — иконка-оверлей показывает play.
+  final bool paused;
   final NgSkin skin;
 
   const NgAudioRow({
@@ -658,6 +662,7 @@ class NgAudioRow extends StatelessWidget {
     this.onArtistTap,
     this.trailing,
     this.playing = false,
+    this.paused = false,
     this.skin = NgSkin.gold,
   });
 
@@ -677,7 +682,12 @@ class NgAudioRow extends StatelessWidget {
             children: [
               GestureDetector(
                 onTap: onIconTap,
-                child: NgTrackIcon(url: iconUrl, size: 39),
+                child: Stack(
+                  children: [
+                    NgTrackIcon(url: iconUrl, size: 39),
+                    if (playing) _PlayOverlay(size: 39, paused: paused),
+                  ],
+                ),
               ),
               const SizedBox(width: 7),
               Expanded(
@@ -745,8 +755,15 @@ class NgAudioRow extends StatelessWidget {
               child: SizedBox(
                 width: 60,
                 height: 60,
-                child: ClipOval(
-                  child: NgTrackIcon(url: iconUrl, size: 60, oval: false),
+                child: Stack(
+                  children: [
+                    ClipOval(
+                      child: NgTrackIcon(url: iconUrl, size: 60, oval: false),
+                    ),
+                    // Оверлей play/pause — только на текущем треке.
+                    if (playing)
+                      ClipOval(child: _PlayOverlay(size: 60, paused: paused)),
+                  ],
                 ),
               ),
             ),
@@ -825,8 +842,33 @@ class NgAudioRow extends StatelessWidget {
   }
 }
 
-// Оверлей play на миниатюрах удалён: трек запускается тапом по строке,
-// дублирующая кнопка на обложке только мешала.
+/// Кнопка play/pause на миниатюре ТЕКУЩЕГО трека: полупрозрачная подложка
+/// (обрезается ClipOval родителя) и белая иконка по центру. Тап = пауза/продолжить.
+class _PlayOverlay extends StatelessWidget {
+  final double size;
+
+  /// Трек на паузе — показываем play; играет — pause.
+  final bool paused;
+  const _PlayOverlay({required this.size, required this.paused});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        color: const Color(0x73000000),
+        alignment: Alignment.center,
+        child: Icon(
+          paused ? Icons.play_arrow : Icons.pause,
+          size: size * 0.55,
+          color: ngWhite,
+          shadows: [Shadow(color: ngBlack, blurRadius: 4)],
+        ),
+      ),
+    );
+  }
+}
 
 /// Строка таблицы деталей сабмишена.
 class NgInfoItem {
