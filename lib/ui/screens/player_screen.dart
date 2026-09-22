@@ -233,15 +233,18 @@ class _TopBar extends StatefulWidget {
 class _TopBarState extends State<_TopBar> {
   Future<void> _onFavTap(
       BuildContext context, NgViewModel vm, LibraryViewModel lvm) async {
-    if (vm.currentUser == null) {
-      await _requireLogin(context, vm, 'Log in to save favorites.');
-      return;
-    }
+    // Логин не обязателен: при таргете NG без сессии сердечко ляжет локально,
+    // а предупредим только тем, кто думал, что пишет на сайт.
+    final toNg = await lvm.favGoesToNg();
     final ok = await lvm.toggleFavorite(widget.track!);
-    if (!context.mounted || ok) return;
-    final error = lvm.lastError;
-    lvm.clearError();
-    _showNgSnack(context, error ?? 'Failed to save favorite', ok: false);
+    if (!context.mounted) return;
+    if (!ok) {
+      final error = lvm.lastError;
+      lvm.clearError();
+      _showNgSnack(context, error ?? 'Failed to save favorite', ok: false);
+    } else if (!toNg) {
+      _showNgSnack(context, 'Saved to local favorites', ok: true);
+    }
   }
 
   @override

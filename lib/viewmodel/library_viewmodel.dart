@@ -35,6 +35,12 @@ class LibraryViewModel extends ChangeNotifier {
   FavoriteSaveTarget _favTarget = FavoriteSaveTarget.local;
   FavoriteSaveTarget get favTarget => _favTarget;
 
+  /// true, когда сердечки по настройке должны уходить на NG (таргет NG и есть
+  /// живая сессия). UI использует, чтобы честно предупредить про локальное
+  /// сохранение вместо сайта.
+  Future<bool> favGoesToNg() async =>
+      _favTarget == FavoriteSaveTarget.newgrounds && await NgAuth.isLoggedIn();
+
   /// Свёрнутые секции библиотеки (сохраняются между запусками).
   final _collapsed = <LibrarySection>{};
 

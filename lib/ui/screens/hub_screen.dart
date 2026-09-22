@@ -873,42 +873,29 @@ class _TrackActions extends StatelessWidget {
 
   Future<void> _onFavTap(
       BuildContext context, NgViewModel vm, LibraryViewModel lvm) async {
-    if (vm.currentUser == null) {
-      final doLogin = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: ngPodBg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(2)),
-            side: BorderSide(color: ngPodBorder, width: 4),
-          ),
-          title: Text('Login Required', style: ngH2),
-          content: Text('Log in to save favorites.', style: ngBody),
-          actionsPadding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
-          actions: [
-            NgButton(
-              label: 'Cancel',
-              width: 90,
-              onPressed: () => Navigator.pop(context, false),
-            ),
-            NgButton(
-              label: 'Login',
-              icon: 'key',
-              width: 96,
-              onPressed: () => Navigator.pop(context, true),
-            ),
-          ],
-        ),
-      );
-      if (doLogin == true && context.mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-        if (context.mounted) await vm.fetchUser();
-      }
-      return;
+    // Логин не обязателен: без сессии сердечко сохранится локально, снек
+    // только тем, кто ждал записи на NG.
+    final toNg = await lvm.favGoesToNg();
+    final ok = await lvm.toggleFavorite(track);
+    if (!context.mounted) return;
+    if (!ok) {
+      final error = lvm.lastError;
+      lvm.clearError();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error ?? 'Failed to save favorite',
+            style: TextStyle(color: ngWhite, fontSize: 12)),
+        backgroundColor: ngRed,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ));
+    } else if (!toNg) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Saved to local favorites',
+            style: TextStyle(color: ngWhite, fontSize: 12)),
+        backgroundColor: ngOrange,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ));
     }
-    await lvm.toggleFavorite(track);
   }
 }
