@@ -89,12 +89,20 @@ class NgRepository {
   Future<void> enrichTrack(Track track) async {
     try {
       final html = await _connectRaw('$_baseUrl/audio/listen/${track.id}');
+      enrichFromHtml(track, html);
+    } catch (_) {}
+  }
+
+  /// Разбор полной меты со страницы listen в уже существующий трек:
+  /// preload-data (mp3/score/votes/genre/icon) + sidestats/теги/комменты.
+  void enrichFromHtml(Track track, String html) {
+    try {
       final match = RegExp(
         r'<script[^>]+id="preload-data"[^>]*>(.*?)</script>',
         dotAll: true,
       ).firstMatch(html);
       if (match == null) {
-        await _enrichFallback(track, html);
+        _enrichFallback(track, html);
         return;
       }
       final data = jsonDecode(match.group(1)!) as Map<String, dynamic>;
@@ -143,6 +151,52 @@ class NgRepository {
     } catch (_) {
       return [];
     }
+  }
+
+  /// Трек по номеру: `/audio/listen/{id}` целиком (нужен и для поиска по
+  /// ID — Геометри Дэш-айди). 404/гостевая страница → null. Мета (жанр,
+  /// статистика, теги, комменты) обогащается из ТОГО ЖЕ html — второй
+  /// запрос при открытии плеера не нужен.
+  Future<Track?> getTrackById(String id) async {
+    final clean = id.trim();
+    if (int.tryParse(clean) == null) return null;
+    try {
+      final html = await _connectRaw('$_baseUrl/audio/listen/$clean');
+      final track = trackFromListenPage(clean, html);
+      if (track != null) enrichFromHtml(track, html);
+      return track;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Разбор страницы `/audio/listen/{id}` без списка: og:title / og:audio /
+  /// og:image + артист из `.item-details-main h4 a`. Публичный для теста
+  /// на сохранённой странице без сети.
+  Track? trackFromListenPage(String id, String html) {
+    if (html.contains('The page you requested could not be found')) {
+      return null;
+    }
+    final doc = htmlParser.parse(html);
+    String? meta(String prop) => doc
+        .querySelector('meta[property="$prop"]')
+        ?.attributes['content'];
+
+    final title = _decodeEntities(meta('og:title') ?? '');
+    if (title.isEmpty) return null;
+    final artist = _decodeEntities(
+        doc.querySelector('.item-details-main h4 a')?.text.trim() ?? '');
+
+    return Track(
+      id: id,
+      title: title,
+      artist: artist.isEmpty ? 'Unknown' : artist,
+      genre: '',
+      iconUrl: meta('og:image') ?? '',
+      duration: 0,
+      audioType: 3,
+      mp3Url: meta('og:audio'),
+    );
   }
 
   /// Loads score/votes/listens into track fields (uses enrichTrack internally)
@@ -1616,7 +1670,7 @@ class NgRepository {
   // ─── Internals ──────────────────────────────────────────────────────────────
 
   /// Fallback enrichment using parsed HTML document
-  Future<void> _enrichFallback(Track track, String html) async {
+  void _enrichFallback(Track track, String html) {
     try {
       final doc = htmlParser.parse(html);
       track.mp3Url ??= doc

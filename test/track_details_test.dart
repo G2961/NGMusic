@@ -115,6 +115,29 @@ void main() {
     expect(track.description, isNot(contains('img.ngfiles.com')));
   });
 
+  test('поиск по ID: страница listen разбирается в трек', () {
+    final html =
+        File('test/fixtures/listen_1572356.html').readAsStringSync();
+    final repo = NgRepository();
+    final t = repo.trackFromListenPage('1572356', html);
+
+    expect(t, isNotNull);
+    expect(t!.id, '1572356');
+    expect(t.title, 'DPI-filtration');
+    expect(t.artist, 'H31072');
+    expect(t.iconUrl, contains('aicon.ngfiles.com'));
+    expect(t.mp3Url, contains('audio.ngfiles.com'));
+
+    // Обогащение из того же html (как это делает getTrackById):
+    // статистика, жанр, теги и комменты приезжают сразу.
+    repo.enrichFromHtml(t, html);
+    expect(t.listens, '3,754');
+    expect(t.score, '4.78');
+    expect(t.genre, 'Hip Hop - Olskool');
+    expect(t.uploaded, 'May 27, 2026');
+    expect(t.descriptionHtml, isNotNull);
+  });
+
   test('обложка отдаётся кандидатами от _raw.png к превью', () {
     final track = _legacy()
       ..iconUrl = 'https://aicon.ngfiles.com/1572/1572356_medium.webp?f1';

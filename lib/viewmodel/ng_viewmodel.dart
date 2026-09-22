@@ -195,8 +195,20 @@ class NgViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      searchResults = await _repo.searchTracks(q, offset: 0);
-      _searchHasMore = searchResults.length >= 24;
+      // Чистое число — это NG ID (Геометри Дэш юзеры ищут так): тянем
+      // трек прямо со страницы /audio/listen/{id} вместо полнотекстового
+      // поиска, который по цифрам почти всегда пуст.
+      if (RegExp(r'^\d{4,8}$').hasMatch(q)) {
+        final byId = await _repo.getTrackById(q);
+        searchResults = byId != null ? [byId] : [];
+        _searchHasMore = false;
+        if (byId == null) {
+          searchError = 'No track #$q on Newgrounds.';
+        }
+      } else {
+        searchResults = await _repo.searchTracks(q, offset: 0);
+        _searchHasMore = searchResults.length >= 24;
+      }
     } catch (e) {
       searchError = 'Ошибка поиска: $e';
     } finally {
