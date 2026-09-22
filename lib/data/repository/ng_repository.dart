@@ -1698,7 +1698,9 @@ class NgRepository {
         track.authorIcon = avatar.split('?').first;
       }
 
-      // Author Comments — `#author_comments` (картинки внутри нам не нужны).
+      // Author Comments — `#author_comments`. Берём сырой HTML (там абзацы,
+      // жирный, цитаты и картинки с img.ngfiles.com) плюс плоский текст
+      // как фоллбэк, если рендер HTML не смог разобрать разметку.
       final comments = doc.querySelector('#author_comments');
       if (comments != null) {
         final text = comments
@@ -1710,6 +1712,8 @@ class NgRepository {
             ? comments.text.replaceAll(RegExp(r'\s+'), ' ').trim()
             : text;
         if (flat.isNotEmpty) track.description = flat;
+        final raw = comments.innerHtml.trim();
+        if (raw.isNotEmpty) track.descriptionHtml = raw;
       }
 
       // Licensing Terms — `#creative_commons .pod-body`.

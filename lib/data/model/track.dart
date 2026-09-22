@@ -50,6 +50,10 @@ class Track {
   /// `Author Comments` — описание сабмишена текстом.
   String? description;
 
+  /// Author Comments как сырой HTML (`#author_comments`): абзацы, жирный,
+  /// цитаты и картинки. [description] остаётся плоским фоллбэком.
+  String? descriptionHtml;
+
   /// `Licensing Terms` — условия использования.
   String? license;
 

@@ -94,6 +94,27 @@ void main() {
     expect(track.tags, ['8bit', 'chiptune']);
   });
 
+  test('Author Comments: HTML с картинками сохраняется вместе с текстом', () {
+    final html =
+        File('test/fixtures/listen_1572356.html').readAsStringSync();
+    final track = _legacy();
+
+    NgRepository().parseListenDetails(track, html);
+
+    // Сырой HTML дошёл до UI: абзацы и обе картинки на месте.
+    expect(track.descriptionHtml, isNotNull);
+    expect(track.descriptionHtml, contains('<p>'));
+    expect(track.descriptionHtml,
+        contains('https://img.ngfiles.com/image-uploads/'));
+    expect(
+        RegExp('iu_1601784_20599008.webp').hasMatch(track.descriptionHtml!),
+        isTrue);
+    // Плоский текст по-прежнему рядом — фоллбэк для рендера.
+    expect(track.description, contains('random garba'));
+    // Картинки не должны попадать в плоский текст-фоллбэк.
+    expect(track.description, isNot(contains('img.ngfiles.com')));
+  });
+
   test('обложка отдаётся кандидатами от _raw.png к превью', () {
     final track = _legacy()
       ..iconUrl = 'https://aicon.ngfiles.com/1572/1572356_medium.webp?f1';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ngmusic/ui/theme/ng_theme.dart';
+import 'package:ngmusic/ui/screens/player_screen.dart';
 import 'package:ngmusic/ui/widgets/ng_player.dart';
 import 'package:ngmusic/ui/widgets/ng_retro.dart';
 
@@ -16,6 +17,35 @@ void main() {
       view.resetPhysicalSize();
       view.resetDevicePixelRatio();
     });
+  });
+
+  testWidgets('Author Comments: пустой p>br — ровно одна пустая строка', (tester) async {
+    // Живой паттерн NG: пустая строка = <p><br/></p> (из .tmp/t_auth.html).
+    const html =
+        '<p>I made something new</p><p><br /></p><p><strong><u>Follow Junior Paes here</u></strong></p>'
+        '<p><a href="https://open.spotify.com/artist/x">Spotify</a></p><p><br /></p><p><br /></p><p>Bye</p>';
+    await tester.pumpWidget(MaterialApp(
+      theme: ngTheme,
+      home: Scaffold(
+        backgroundColor: ngBlack,
+        body: SingleChildScrollView(
+          child: AuthorCommentsTestable(html: html),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Пустых текст-строк нет: все SizedBox(18) — по одной на пустую строку.
+    final blanks = tester
+        .widgetList<SizedBox>(find.byType(SizedBox))
+        .where((sb) => sb.height == 18.0)
+        .length;
+    expect(blanks, 2, reason: 'две пустые секции в html, каждая — один бланк');
+    // Нет Text-виджетов из одних переводов строк.
+    final bareNl = tester
+        .widgetList<Text>(find.byType(Text))
+        .where((t) => (t.data ?? '').trim().isEmpty && (t.data ?? '').contains('\n'));
+    expect(bareNl, isEmpty);
   });
 
   testWidgets('плеер целиком раскладывается и рисуется', (tester) async {
@@ -60,7 +90,7 @@ void main() {
                         action: NgPlateLink(label: 'Profile »', onTap: () {}),
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text('Follow to keep up with new '
                                   'submissions.', style: ngBody),
                             ),
