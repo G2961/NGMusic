@@ -169,14 +169,28 @@ class NgCloudPlaylist {
 
 /// Кнопка `favefollow` со страницы NG: секрет кнопки, одноразовый
 /// `userkey` и текущее состояние (`null` — определить не удалось).
+///
+/// Помимо старого path `/favorites/{type}/{add|remove}/{key}`, подписка 2026
+/// отдаёт в `initFollowButton` прямые URL store/destroy — ходим по ним
+/// (`/favorites/users/{id}/follow`), не собирая path из ключа.
 class NgFaveButton {
   final String key;
   final String userkey;
   final bool? active;
 
+  /// Прямой POST-URL для подписки (`/favorites/users/{id}/follow`),
+  /// если NG отдал его в кнопке (2026). null — для избранного (другой путь).
+  final String? followUrl;
+
+  /// URL отписки (`destroy`) из той же кнопки; на сайте оба — POST
+  /// с `userkey`, различаются только адресом.
+  final String? unfollowUrl;
+
   const NgFaveButton({
     required this.key,
     required this.userkey,
     this.active,
+    this.followUrl,
+    this.unfollowUrl,
   });
 }

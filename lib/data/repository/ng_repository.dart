@@ -277,9 +277,34 @@ class NgRepository {
   ///
   /// Публичный, чтобы проверяться тестом без сети.
   NgFaveButton? parseFaveButton(String html, String initFn) {
+    // Подписка 2026: `initFollowButton("#id", "key", {"store":url,"destroy":url})`
+    // третий аргумент — объект с прямыми URL, второй — ключ. Выуживаем URL.
+    if (initFn == 'initFollowButton') {
+      final m = RegExp(
+        'initFollowButton\\s*\\(\\s*"([^"]+)"\\s*,\\s*"([^"]+)"'
+        '\\s*,\\s*\\{[^}]*"store"\\s*:\\s*"([^"]+)"'
+        '[^}]*"destroy"\\s*:\\s*"([^"]+)"',
+      ).firstMatch(html);
+      if (m != null) {
+        final domId = m.group(1)!;
+        final wrapper = RegExp(
+          '<span class="favefollow-buttons([^"]*)" id="${RegExp.escape(domId)}"',
+        ).firstMatch(html);
+        return NgFaveButton(
+          key: m.group(2)!,
+          // Второй аргумент — и есть userkey: registerListener кладёт
+          // его в пул и шлёт в POST как data.userkey.
+          userkey: m.group(2)!,
+          active: wrapper?.group(1)!.contains('active'),
+          followUrl: m.group(3)!.replaceAll('\\/', '/'),
+          unfollowUrl: m.group(4)!.replaceAll('\\/', '/'),
+        );
+      }
+    }
+
     final init = RegExp(
-      'ngutils\\.$initFn\\(\\s*["\']#([^"\']+)["\']\\s*,'
-      '\\s*["\']([^"\']*)["\']\\s*,\\s*["\']([^"\']+)["\']\\s*\\)',
+      'ngutils\\.$initFn\\(\\s*["\' ]#([^"\' ]+)["\' ]\\s*,'
+      '\\s*["\' ]([^"\' ]*)["\' ]\\s*,\\s*["\' ]([^"\' ]+)["\' ]\\s*\\)',
     ).firstMatch(html);
     if (init != null) {
       final domId = init.group(1)!;
@@ -553,6 +578,26 @@ class NgRepository {
       }
       if (button.active == add) return add;
 
+      // CSRF-сессия GET и POST должна совпадать; NG при GET может ротировать
+      // сессию через Set-Cookie (как у избранного) — иначе 419. Мержим.
+      final cookieForPost =
+          _mergeSetCookie(cookie, page.headers['set-cookie']);
+
+      // 2026: NG отдал прямые URL store/destroy — ходим по ним
+      // (`/favorites/users/{id}/follow`). Старый `/favorites/follow/...` 404.
+      if (button.followUrl != null) {
+        final followReferer =
+            page.request?.url?.toString() ?? '$startUrl/';
+        return _postFollow(
+          url: (add ? button.followUrl : button.unfollowUrl) ?? button.followUrl!,
+          userkey: button.userkey,
+          add: add,
+          cookie: cookieForPost,
+          referer: followReferer,
+          csrfToken: _csrfFrom(page.body),
+        );
+      }
+
       final finalUri = page.request?.url ?? Uri.parse(startUrl);
       final origin = '${finalUri.scheme}://${finalUri.host}';
 
@@ -567,6 +612,54 @@ class NgRepository {
       );
     } catch (e) {
       debugPrint('[ng] setFollow($artistUsername, $add) failed: $e');
+      return null;
+    }
+  }
+
+  /// POST на прямой URL подписки 2026 (`/favorites/users/{id}/follow`).
+  ///
+  /// Разобрано по JS сайта (legacy.js → ajaxifyLink → ajaxWait): клик по
+  /// follow-кнопке шлёт обычный **POST** на href ссылки (`store` для подписки,
+  /// `destroy` для отписки) с формой `userkey=<ключ из initFollowButton>`
+  /// (+`___ng_design`, если выбран старый дизайн). Никаких DELETE.
+  Future<bool?> _postFollow({
+    required String url,
+    required String userkey,
+    required bool add,
+    required String cookie,
+    required String referer,
+    String? csrfToken,
+  }) async {
+    try {
+      final uri = Uri.parse(url);
+
+      final headers = {
+        'User-Agent': _userAgent,
+        'Cookie': cookie,
+        'X-Requested-With': 'XMLHttpRequest',
+        if (csrfToken != null && csrfToken.isNotEmpty)
+          'X-CSRF-TOKEN': csrfToken,
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Referer': referer,
+      };
+
+      final body =
+          'userkey=${Uri.encodeQueryComponent(userkey)}&___ng_design=2015';
+      final client = http.Client();
+      final response = await client
+          .post(uri, headers: headers, body: body)
+          .timeout(const Duration(seconds: 15));
+      client.close();
+
+      debugPrint('[ng] follow POST -> ${response.statusCode} '
+          '${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      if (response.statusCode == 200) {
+        return parseFaveResponse(response.body, add);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ng] follow $url failed: $e');
       return null;
     }
   }
