@@ -340,7 +340,12 @@ class NgRepository {
         '[^}]*"destroy"\\s*:\\s*"([^"]+)"',
       ).firstMatch(html);
       if (m != null) {
-        final domId = m.group(1)!;
+        // Первый аргумент — jQuery-селектор с решёткой (`#ffr_…`),
+        // в HTML id без неё. Не срезав #, не найдём обёртку и потеряем
+        // active-статус подписки (обёртка носит класс active).
+        final domId = m.group(1)!.startsWith('#')
+            ? m.group(1)!.substring(1)
+            : m.group(1)!;
         final wrapper = RegExp(
           '<span class="favefollow-buttons([^"]*)" id="${RegExp.escape(domId)}"',
         ).firstMatch(html);
@@ -771,6 +776,16 @@ class NgRepository {
 
   // ─── Reviews & Voting ──────────────────────────────────────────────────
 
+  /// Мой голос из votebar-а страницы трека: NG рендерит checked-радио
+  /// (`value="10" checked` = 5 звёзд) только когда голос уже стоит.
+  /// Без голоса/без авторизации checked нет. Публичный ради теста.
+  int? parseMyVote(String html) {
+    final m = RegExp(
+      'id="votebar-\\d+"\\s+value="(\\d+)"\\s+checked',
+    ).firstMatch(html);
+    return m == null ? null : int.tryParse(m.group(1)!);
+  }
+
   /// `&amp;` → `&` и т.п. — NG экранирует сущности в текстах отзывов.
   String _decodeEntities(String s) => s
       .replaceAll('&amp;', '&')
@@ -1054,6 +1069,14 @@ class NgRepository {
       if (review != null) {
         await NgAuth.saveMyReview(trackId, review.id, review.body,
             review.hasScore ? (review.score * 2).round() : null);
+      }
+      // Голос живёт в votebar-е той же страницы (не в карточке отзыва):
+      // сайт рендерит checked-радио с текущим голосом. Голос с сайта —
+      // истина; отсутствие checked (= не голосовал) НЕ трёт кэш, чтобы
+      // недокачанная страница не выглядела «голос сброшен».
+      final siteVote = parseMyVote(html);
+      if (siteVote != null) {
+        await NgAuth.saveMyVote(trackId, siteVote.clamp(0, 10));
       }
       return review;
     } catch (e) {
@@ -1792,6 +1815,16 @@ class NgRepository {
               .firstWhere((s) => s != null && s.isNotEmpty, orElse: () => null);
       if (avatar != null && avatar.isNotEmpty) {
         track.authorIcon = avatar.split('?').first;
+      }
+
+      // Мой голос: NG рендерит checked-радио в votebar-е только когда
+      // голос на этом треке уже стоит (`value="10" checked` = 5 звёзд).
+      // Без голоса votebar либо отсутствует (гость), либо без checked.
+      final myVoteM = RegExp(
+        'id="votebar-\\d+"\\s+value="(\\d+)"\\s+checked',
+      ).firstMatch(html);
+      if (myVoteM != null) {
+        track.myVote = int.tryParse(myVoteM.group(1)!);
       }
 
       // Author Comments — `#author_comments`. Берём сырой HTML (там абзацы,
