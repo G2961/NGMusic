@@ -1,63 +1,66 @@
 # NGMusic
 <img width="2160" height="1080" alt="Picsart_26-09-22_14-13-50-119" src="https://github.com/user-attachments/assets/70199b32-7fd9-4732-a8ec-e77aa689683b" />
 
-Мобильный плеер для [Newgrounds Audio Portal](https://www.newgrounds.com/audio) — неофициальный клиент, имеющий большой функционал и возможности. Тот же NG Audio Portal, но в виде удобного приложения.
-## Что умеет
+**English** | [Русский](README.ru.md)
 
-- **Каталог и поиск:** хабы (Featured / Popular / New / Top Rated), поиск по трекам с подгрузкой страниц при скролле
-- **Плеер:** стриминг mp3, очередь, автопереход к следующему треку, мини-плеер, фоновое воспроизведение
-- **Оценки:** голосование 0–5 звёзд с шагом 0.5 для Modern, и по цельным звездам для Classic оболочки.
-- **Избранное и плейлисты:** добавление треков в избранное на аккаунте Newgrounds, локальные плейлисты
-- **Аккаунт:** вход в Newgrounds, просмотр своей библиотеки плейлистов и возможность их создания.
-- **Артисты:** страницы исполнителей с их треками
-- **Скачивание:** загрузка mp3 на устройство
+A mobile player for the [Newgrounds Audio Portal](https://www.newgrounds.com/audio) — an unofficial client with a lot of features. The same NG Audio Portal, but as a convenient app.
 
-Данные тянутся напрямую с newgrounds.com: HTML парсится локально, аудио стримится с CDN Newgrounds.
+## Features
 
-## Стек
+- **Catalog and search:** hubs (Featured / Popular / New / Top Rated), track search with endless scrolling
+- **Player:** mp3 streaming, queue, auto-advance to the next track, mini-player, background playback
+- **Ratings:** 0–5 star voting in 0.5 steps for the Modern skin, whole stars for the Classic skin
+- **Favorites and playlists:** add tracks to your Newgrounds account favorites, local playlists
+- **Account:** log in to Newgrounds, view and create your playlists library
+- **Artists:** artist pages with their tracks
+- **Downloads:** save mp3 files to the device
+
+Data is pulled directly from newgrounds.com: HTML is parsed locally, audio is streamed from the Newgrounds CDN.
+
+## Tech stack
 
 - Flutter / Dart, min SDK — Android 5.0 (API 21)
-- `http` + `html` для загрузки и парсинга страниц
-- `just_audio` + `audio_service` используются для воспроизведения и фонового режима
-- `provider` для состояния (`ChangeNotifier`)
-- `sqflite` используется как основа для локальной библиотеки (история, плейлисты)
-- `webview_flutter` используются для входа в аккаунт Newgrounds.
+- `http` + `html` for fetching and parsing pages
+- Media3 (ExoPlayer + MediaSessionService) for playback and background mode
+- `provider` for state management (`ChangeNotifier`)
+- `sqflite` as the base of the local library (favorites, playlists)
+- `webview_flutter` for logging in to a Newgrounds account
 
-## Сборка и запуск
+## Build and run
 
 ```bash
 flutter pub get
-flutter run                    # дев-режим
-flutter build apk --release   # релизный APK
+flutter run                    # dev mode
+flutter build apk --release   # release APK
 ```
 
-Тесты:
+Tests:
 
 ```bash
 flutter test
 ```
 
-## Структура
+## Structure
 
 ```
 lib/
 ├── data/
-│   ├── model/track.dart               # Модель трека
-│   └── repository/ng_repository.dart  # Запросы и парсинг newgrounds.com
+│   ├── model/track.dart               # Track model
+│   └── repository/ng_repository.dart  # newgrounds.com requests and parsing
 ├── player/
-│   └── ng_audio_handler.dart          # Аудио-хендлep (just_audio + audio_service)
+│   └── ng_audio_handler.dart          # Audio handler (bridge to the native Media3 player)
 ├── services/
-│   └── track_downloader.dart          # Скачивание mp3
+│   └── track_downloader.dart          # mp3 downloads
 ├── ui/
-│   ├── screens/                       # Хаб, плеер, библиотека, аккаунт, артисты, поиск
-│   ├── widgets/                       # Ретро-виджеты: хром 2015, votebar, мини-плеер
-│   └── theme/ng_theme.dart            # NG-палитра и шрифты
+│   ├── screens/                       # Hub, player, library, account, artists, search
+│   ├── widgets/                       # Retro widgets: 2015 chrome, votebar, mini-player
+│   └── theme/ng_theme.dart            # NG palette and fonts
 ├── viewmodel/
-│   ├── ng_viewmodel.dart              # Состояние каталога и плеера
-│   └── library_viewmodel.dart         # Локальная библиотека
-└── main.dart                          # Точка входа
+│   ├── ng_viewmodel.dart              # Catalog and player state
+│   └── library_viewmodel.dart         # Local library
+└── main.dart                          # Entry point
 ```
 
-## ❗ВАЖНО!❗
+## ❗IMPORTANT❗
 
-Приложение неофициальное и не связано с Newgrounds. Все права на контент принадлежат его авторам и Newgrounds.
+This app is unofficial and not affiliated with Newgrounds. All content rights belong to its authors and Newgrounds.
