@@ -33,8 +33,8 @@ android {
         applicationId "com.g2961.ngmusic"
         minSdkVersion flutter.minSdkVersion
         targetSdk 36
-        versionCode 3
-        versionName "1.2"
+        versionCode 2
+        versionName "1.1"
     }
 
     signingConfigs {
