@@ -11,6 +11,16 @@ import '../model/ng_review.dart';
 import '../model/playlist.dart';
 import 'ng_auth.dart';
 
+class NgSiteDownException implements Exception {
+  final int statusCode;
+  final String url;
+
+  NgSiteDownException(this.statusCode, this.url);
+
+  @override
+  String toString() => 'Newgrounds is down (HTTP $statusCode)';
+}
+
 class NgRepository {
   static const _baseUrl = 'https://www.newgrounds.com';
   static const _userAgent =
@@ -1785,7 +1795,9 @@ class NgRepository {
   Future<String> _connectRaw(String url) async {
     final response = await _fetch(url);
     if (response.statusCode != 200) {
-      throw Exception('HTTP ${response.statusCode} for $url');
+      throw response.statusCode >= 500
+          ? NgSiteDownException(response.statusCode, url)
+          : Exception('HTTP ${response.statusCode} for $url');
     }
     return response.body;
   }
@@ -1793,7 +1805,9 @@ class NgRepository {
   Future<Document> _connect(String url) async {
     final response = await _fetch(url);
     if (response.statusCode != 200) {
-      throw Exception('HTTP ${response.statusCode} for $url');
+      throw response.statusCode >= 500
+          ? NgSiteDownException(response.statusCode, url)
+          : Exception('HTTP ${response.statusCode} for $url');
     }
     return htmlParser.parse(response.body);
   }
@@ -1801,7 +1815,9 @@ class NgRepository {
   Future<String> _connectRawAuth(String url, String cookie) async {
     final response = await _fetch(url, cookie: cookie);
     if (response.statusCode != 200) {
-      throw Exception('HTTP ${response.statusCode} for $url');
+      throw response.statusCode >= 500
+          ? NgSiteDownException(response.statusCode, url)
+          : Exception('HTTP ${response.statusCode} for $url');
     }
     return response.body;
   }

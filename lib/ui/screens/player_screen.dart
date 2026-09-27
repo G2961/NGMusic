@@ -1093,6 +1093,8 @@ class _AuthorPodState extends State<_AuthorPod> {
     final t = widget.track;
     final artist = t.artist;
     final followed = _followed == true;
+    final isSelf =
+        vm.currentUser?.username.toLowerCase() == artist.toLowerCase();
 
     void openProfile() => Navigator.push(
           context,
@@ -1140,18 +1142,19 @@ class _AuthorPodState extends State<_AuthorPod> {
               margin: const EdgeInsets.symmetric(horizontal: 8),
               color: ngHairline,
             ),
-            Center(
-              child: NgButton(
-                label: _following
-                    ? '…'
-                    : followed
-                        ? 'Following'
-                        : 'Follow',
-                icon: followed ? 'check' : 'user-add',
-                width: 96,
-                onPressed: _following ? null : () => _onFollowTap(vm),
+            if (!isSelf)
+              Center(
+                child: NgButton(
+                  label: _following
+                      ? '…'
+                      : followed
+                          ? 'Following'
+                          : 'Follow',
+                  icon: followed ? 'check' : 'user-add',
+                  width: 96,
+                  onPressed: _following ? null : () => _onFollowTap(vm),
+                ),
               ),
-            ),
           ],
         ),
       ),

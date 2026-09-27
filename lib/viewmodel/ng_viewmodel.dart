@@ -102,7 +102,7 @@ class NgViewModel extends ChangeNotifier {
       s.loaded = true;
       notifyListeners();
     }).catchError((e) {
-      s.error = 'Ошибка загрузки: $e';
+      s.error = _errText(e, 'Ошибка загрузки');
       s.isLoading = false;
       notifyListeners();
     });
@@ -135,7 +135,7 @@ class NgViewModel extends ChangeNotifier {
         }
       }
     } catch (e) {
-      s.error = 'Ошибка: $e';
+      s.error = _errText(e, 'Ошибка');
     } finally {
       s.isLoadingMore = false;
       notifyListeners();
@@ -192,7 +192,7 @@ class NgViewModel extends ChangeNotifier {
         _searchHasMore = searchResults.length >= 24;
       }
     } catch (e) {
-      searchError = 'Ошибка поиска: $e';
+      searchError = _errText(e, 'Ошибка поиска');
     } finally {
       isSearching = false;
       notifyListeners();
@@ -270,6 +270,10 @@ class NgViewModel extends ChangeNotifier {
   }
 
 
+  String _errText(Object e, String prefix) => e is NgSiteDownException
+      ? 'Newgrounds лежит: на сайте техработы, приложение ни при чём. Попробуй позже.'
+      : '$prefix: $e';
+
   bool _shuffle = false;
   bool get shuffle => _shuffle;
 
@@ -333,7 +337,7 @@ class NgViewModel extends ChangeNotifier {
         }
       }
     } catch (e) {
-      if (gen == _playGen) playError = 'Ошибка воспроизведения: $e';
+      if (gen == _playGen) playError = _errText(e, 'Ошибка воспроизведения');
     } finally {
       if (gen == _playGen) {
         isLoadingTrack = false;
@@ -357,8 +361,13 @@ class NgViewModel extends ChangeNotifier {
 
   void _onTrackCompleted() {
     if (currentTrack == null || _lastCompletedId == currentTrack!.id) return;
+    if (_repeat == 2) {
+      audioHandler.seek(Duration.zero);
+      audioHandler.play();
+      notifyListeners();
+      return;
+    }
     _lastCompletedId = currentTrack!.id;
-    if (_repeat == 2) { playTrack(currentTrack!); return; }
     if (_shuffle) { _playRandom(); return; }
     final list = _allTracks;
     final idx = list.indexWhere((t) => t.id == currentTrack!.id);
