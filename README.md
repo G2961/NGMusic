@@ -1,6 +1,6 @@
 # NGMusic
-<img width="2160" height="1080" alt="Picsart_26-09-27_04-57-53-892" src="https://github.com/user-attachments/assets/f5e87fbb-d0d5-4ec7-bf84-a9e9bb164cc1" />
 
+<img width="2160" height="1080" alt="Picsart_26-09-27_04-57-53-892" src="https://github.com/user-attachments/assets/f5e87fbb-d0d5-4ec7-bf84-a9e9bb164cc1" />
 
 **English** | [Русский](README.ru.md)
 
