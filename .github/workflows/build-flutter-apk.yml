@@ -31,6 +31,26 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Restore release keystore (debug signing if secrets are absent)
+        env:
+          NGM_KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          NGM_STORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          NGM_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          NGM_KEY_PASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$NGM_KEYSTORE_B64" ]; then
+            echo "KEYSTORE_BASE64 is not set — release APK falls back to debug signing"
+            exit 0
+          fi
+          echo "$NGM_KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          cat > android/key.properties <<EOF
+          storeFile=release.keystore
+          storePassword=$NGM_STORE_PASS
+          keyAlias=$NGM_KEY_ALIAS
+          keyPassword=$NGM_KEY_PASS
+          EOF
+          echo "release.keystore restored ($(wc -c < android/app/release.keystore) bytes)"
+
       - name: Analyze (опционально, но полезно — упадёт при ошибках линта)
         run: flutter analyze
         continue-on-error: true   # убери эту строку если хочешь чтобы линт-ошибки валили билд
