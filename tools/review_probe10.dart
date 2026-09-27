@@ -1,6 +1,3 @@
-// Разведка v10: где на странице трека лежат отзывы (заголовок podtop с
-// «Reviews») и что идёт сразу после моей карточки (кнопка «Read More»?).
-// Запуск: dart run tools/review_probe10.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -26,7 +23,6 @@ Future<void> main(List<String> args) async {
           headers: headers(cookie)))
       .body;
 
-  // Заголовок «Reviews» обычно далеко выше карточек (под с plashкой «Read more»).
   for (final pat in ['>Reviews<', 'Reviews</', 'review-head', 'reviews-for',
       'Read More', 'read-more', 'reviews_url', 'review_count']) {
     final idx = body.indexOf(pat);
@@ -36,7 +32,6 @@ Future<void> main(List<String> args) async {
           .replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' '));
     }
   }
-  // Отзывы вообще на странице трека или подгружаются?
   final cards = RegExp(r'data-review-id').allMatches(body).length;
   print('review cards on page: $cards');
 }

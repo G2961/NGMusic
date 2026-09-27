@@ -1,5 +1,3 @@
-// Разведка v33: полный справочник жанров из select на /audio/browse.
-// Запуск: dart run tools/genre_probe15.dart
 import 'package:http/http.dart' as http;
 
 const ua =

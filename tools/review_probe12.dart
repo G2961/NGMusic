@@ -1,5 +1,3 @@
-// Разведка v12: разметка карточки ЧУЖОГО отзыва на /reviews/portal —
-// звёзды (title), реакции (числа), флажок. Запуск: dart run tools/review_probe12.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -26,14 +24,12 @@ Future<void> main(List<String> args) async {
   final body = b.body;
   print('GET -> ${b.statusCode} len=${body.length}');
 
-  // Заголовки звёзд: все варианты score-разметки.
   print('=== score markup ===');
   for (final m in RegExp(r'.{40}star-score.{140}').allMatches(body).take(4)) {
     print(m.group(0)!.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' '));
     print('---');
   }
 
-  // Первая карточка целиком (до второй).
   final cards = RegExp(
           r'<div\s+class="pod-body review"[\s\S]{0,120}?data-review-id="(\d+)">')
       .allMatches(body)
@@ -49,7 +45,6 @@ Future<void> main(List<String> args) async {
         .replaceAll(RegExp(r'\s+'), ' '));
   }
 
-  // Реакции: числа в карточках.
   print('=== reaction numbers ===');
   for (final m in RegExp(
           r'initTotals\([^)]*\)|data-count-key="[^"]*"|reaction-totals[^>]*>[^<]*<')

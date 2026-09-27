@@ -11,10 +11,8 @@ import '../data/repository/ng_auth.dart';
 
 enum FavoriteSaveTarget { local, newgrounds }
 
-/// Где создавать плейлист по кнопке «+ Playlist».
 enum PlaylistTarget { local, newgrounds }
 
-/// Секции библиотеки, которые можно сворачивать.
 enum LibrarySection { local, newgrounds, favLocal, favNewgrounds }
 
 class LibraryViewModel extends ChangeNotifier {
@@ -27,7 +25,6 @@ class LibraryViewModel extends ChangeNotifier {
   bool isSyncingNg = false;
   bool isLoggedIn = false;
 
-  /// Последняя ошибка операции с NG — экраны показывают её в снеке.
   String? lastError;
 
   final _favoriteIds = <String>{};
@@ -35,7 +32,9 @@ class LibraryViewModel extends ChangeNotifier {
   FavoriteSaveTarget _favTarget = FavoriteSaveTarget.local;
   FavoriteSaveTarget get favTarget => _favTarget;
 
-  /// Свёрнутые секции библиотеки (сохраняются между запусками).
+  Future<bool> favGoesToNg() async =>
+      _favTarget == FavoriteSaveTarget.newgrounds && await NgAuth.isLoggedIn();
+
   final _collapsed = <LibrarySection>{};
 
   LibraryViewModel() {
@@ -45,7 +44,6 @@ class LibraryViewModel extends ChangeNotifier {
 
   Future<void> _init() async {
     await refresh();
-    // Автосинхронизация плейлистов NG на старте, если уже вошли.
     final username = await NgAuth.getUsername();
     if (username != null && username.isNotEmpty && username != 'unknown') {
       isLoggedIn = true;
@@ -57,22 +55,17 @@ class LibraryViewModel extends ChangeNotifier {
     await _reconcileNgFavorites();
   }
 
-  /// Локальные плейлисты (без зеркала на NG).
   List<Playlist> get localPlaylists =>
       playlists.where((p) => p.ngId == null).toList();
 
-  /// Плейлисты, отражённые с аккаунта NG.
   List<Playlist> get ngPlaylists =>
       playlists.where((p) => p.ngId != null).toList();
 
-  /// Избранное, которое лежит только в приложении.
   List<Favorite> get localFavorites =>
       favorites.where((f) => !f.isNg).toList();
 
-  /// Избранное, ушедшее в аккаунт Newgrounds.
   List<Favorite> get ngFavorites => favorites.where((f) => f.isNg).toList();
 
-  // ─── Настройки ────────────────────────────────────────────────────────────────
 
   Future<void> _loadPrefs() async {
     final p = await SharedPreferences.getInstance();
@@ -120,9 +113,6 @@ class LibraryViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Refresh с кнопки «Your Favorites»: локальная база + сверка
-  /// избранного/плейлистов с NG (если вошли). Даёт видимый отклик:
-  /// во время работы isSyncingNg = true, кнопка показывает «Refreshing…».
   Future<void> refreshFavorites() async {
     isLoading = true;
     isSyncingNg = true;
@@ -145,20 +135,12 @@ class LibraryViewModel extends ChangeNotifier {
     }
   }
 
-  // ─── Избранное ────────────────────────────────────────────────────────────────
 
   bool isFavorite(String trackId) => _favoriteIds.contains(trackId);
 
   final _favoriteSyncing = <String>{};
   bool isFavoriteSyncing(String trackId) => _favoriteSyncing.contains(trackId);
 
-  /// Переключает избранное для [track].
-  ///
-  /// Локальная база обновляется всегда (вкладка Favorites работает офлайн, а
-  /// «прочитать список избранного» через API NG нельзя). Если в настройках
-  /// выбран Newgrounds и есть сессия — сначала пишем на сайт, и только при
-  /// подтверждении меняем локальное состояние: иначе в приложении светилось бы
-  /// избранное, которого на NG нет.
   Future<bool> toggleFavorite(Track track) async {
     final adding = !_favoriteIds.contains(track.id);
 
@@ -182,7 +164,6 @@ class LibraryViewModel extends ChangeNotifier {
 
     await _db.toggleFavorite(track, isNg: useNg);
     if (adding && useNg) {
-      // Запись могла уже быть (например после сверки) — флаг всё равно точный.
       await _db.setFavoriteIsNg(track.id, true);
     }
     if (adding) {
@@ -194,7 +175,6 @@ class LibraryViewModel extends ChangeNotifier {
     return true;
   }
 
-  // ─── Локальные плейлисты ──────────────────────────────────────────────────────
 
   Future<Playlist> createLocalPlaylist(String name, {String? description}) async {
     final p = await _db.createPlaylist(name, description: description);
@@ -202,11 +182,6 @@ class LibraryViewModel extends ChangeNotifier {
     return p;
   }
 
-  /// Создаёт плейлист там, куда указывает [target].
-  ///
-  /// Для NG плейлист создаётся на сайте (см. `NgRepository.createNgPlaylist` —
-  /// у NG нет ручки «создать пустой», поэтому используется трек-затравка) и
-  /// тут же зеркалится локально, чтобы он появился в списке без пересинка.
   Future<Playlist?> createPlaylist(
     String name, {
     PlaylistTarget target = PlaylistTarget.local,
@@ -237,8 +212,6 @@ class LibraryViewModel extends ChangeNotifier {
     return p;
   }
 
-  /// Переименовывает плейлист. Для зеркала NG сначала правит сайт: иначе
-  /// локальное имя разъедется с настоящим.
   Future<bool> renamePlaylist(int id, String name) async {
     final pl = playlists.firstWhere((p) => p.id == id,
         orElse: () => Playlist(name: name, createdAt: 0));
@@ -259,7 +232,6 @@ class LibraryViewModel extends ChangeNotifier {
     return true;
   }
 
-  /// Удаляет плейлист. Зеркало NG удаляется и на сайте.
   Future<bool> deletePlaylist(int id) async {
     final pl = playlists.firstWhere((p) => p.id == id,
         orElse: () => const Playlist(name: '', createdAt: 0));
@@ -291,10 +263,6 @@ class LibraryViewModel extends ChangeNotifier {
     await refresh();
   }
 
-  /// Добавляет трек в любой плейлист библиотеки.
-  ///
-  /// Для зеркала NG сначала пишем на сайт и только потом в базу, иначе
-  /// в приложении лежал бы трек, которого на NG нет.
   Future<bool> addTrackToPlaylist(Playlist pl, Track track) async {
     if (pl.ngId != null) {
       isSyncingNg = true;
@@ -313,11 +281,6 @@ class LibraryViewModel extends ChangeNotifier {
     return true;
   }
 
-  /// Создаёт плейлист сразу с треком.
-  ///
-  /// Для NG это единственный естественный сценарий: `/playlists/addentry`
-  /// создаёт плейлист вместе с первой записью, так что трек-затравка
-  /// не нужен и ничего удалять потом не придётся.
   Future<Playlist?> createPlaylistWithTrack(
     String name, {
     required PlaylistTarget target,
@@ -331,13 +294,9 @@ class LibraryViewModel extends ChangeNotifier {
     return pl;
   }
 
-  /// Убирает трек из плейлиста. Для зеркала NG — и с сайта тоже.
-  /// Возвращает (ok, updatedPlaylist-треки уже убраны из базы).
   Future<bool> removeTrackFromPlaylist(int playlistId, String trackId) async {
     final pl = playlists.firstWhere((p) => p.id == playlistId,
         orElse: () => const Playlist(name: '', createdAt: 0));
-    // Из локального кэша убираем СРАЗУ (экран мгновенно перерисуется),
-    // удаление на NG — следом; при неудаче вернём ошибку.
     await _db.removeTrackFromPlaylist(playlistId, trackId);
     if (pl.ngId != null) {
       isSyncingNg = true;
@@ -355,10 +314,6 @@ class LibraryViewModel extends ChangeNotifier {
     return true;
   }
 
-  /// Треки плейлиста — cache-first: локальный кэш отдаётся сразу (мгновенный
-  /// рендер), затем для зеркала NG тихо сверяемся с сайтом: добавляем новые
-  /// треки, убираем удалённые. Свежий список возвращается в колбеке, когда
-  /// сверка дошла (или не дошла — тогда кэш так и остаётся на экране).
   Future<List<PlaylistTrack>> loadPlaylistTracks(
     Playlist playlist, {
     ValueChanged<List<PlaylistTrack>>? onSynced,
@@ -366,8 +321,6 @@ class LibraryViewModel extends ChangeNotifier {
     final local = await _db.getPlaylistTracks(playlist.id!);
     if (playlist.ngId == null) return local;
 
-    // Тихая сверка с NG в фоне: результаты сольются в базу и вернутся
-    // через [onSynced]; экран всё это время показывает кэш.
     unawaited(() async {
       List<PlaylistTrack> fresh = local;
       var changed = false;
@@ -375,14 +328,12 @@ class LibraryViewModel extends ChangeNotifier {
         final remote = await _repo.getNgPlaylistTracks(playlist.ngId!);
         final localIds = local.map((t) => t.trackId).toSet();
         final remoteIds = remote.map((t) => t.id).toSet();
-        // Новые на сайте — добавляем.
         for (final t in remote) {
           if (!localIds.contains(t.id)) {
             await _db.addTrackToPlaylist(playlist.id!, t);
             changed = true;
           }
         }
-        // Удалённые с сайта — убираем из кэша.
         for (final t in local) {
           if (!remoteIds.contains(t.trackId)) {
             await _db.removeTrackFromPlaylist(playlist.id!, t.trackId);
@@ -391,7 +342,7 @@ class LibraryViewModel extends ChangeNotifier {
         }
         if (changed) fresh = await _db.getPlaylistTracks(playlist.id!);
       } catch (_) {
-        return; // сеть упала — кэш остаётся на экране как есть
+        return;
       }
       if (changed) onSynced?.call(fresh);
     }());
@@ -399,18 +350,9 @@ class LibraryViewModel extends ChangeNotifier {
     return local;
   }
 
-  // ─── Синхронизация плейлистов NG ──────────────────────────────────────────────
 
-  /// Синхронизация уже идёт — второй вызов ждёт её, а не запускает свою.
-  ///
-  /// Синк дёргают из двух мест (старт [LibraryViewModel] и появление
-  /// пользователя в `_RootShell`), и раньше оба успевали прочитать пустой
-  /// список зеркал и вставить каждый плейлист по разу: в библиотеке они
-  /// дублировались. Уникальный индекс в базе — вторая линия защиты.
   Future<void>? _ngSync;
 
-  /// Вызывается после входа: тянет плейлисты пользователя и сохраняет локально
-  /// с `ng_id`, чтобы отличать их от чисто локальных.
   Future<void> syncNgPlaylists(String username) {
     final running = _ngSync;
     if (running != null) return running;
@@ -426,16 +368,12 @@ class LibraryViewModel extends ChangeNotifier {
     try {
       final cloudPlaylists = await _repo.getUserPlaylists(username);
       if (cloudPlaylists.isNotEmpty) {
-        // Список с сайта тоже стоит схлопнуть по id: страницы `/playlists`
-        // перечитываются с пересечением, если плейлист добавили во время обхода.
         final unique = <String, NgCloudPlaylist>{};
         for (final cp in cloudPlaylists) {
           unique.putIfAbsent(cp.id, () => cp);
         }
-        // Читаем зеркала прямо из базы: `playlists` в памяти мог устареть.
         final stored = await _db.getPlaylists();
         final mirrors = stored.where((p) => p.ngId != null);
-        // Убираем зеркала, которых на NG больше нет.
         for (final p in mirrors) {
           if (!unique.containsKey(p.ngId)) {
             await _db.deletePlaylist(p.id!);
@@ -447,7 +385,6 @@ class LibraryViewModel extends ChangeNotifier {
           if (existing == null) {
             await _db.createPlaylistWithNgId(cp.name, ngId: cp.id);
           } else if (existing.name != cp.name) {
-            // Плейлист переименовали на сайте — подтягиваем имя.
             await _db.renamePlaylist(existing.id!, cp.name);
           }
         }
@@ -457,7 +394,6 @@ class LibraryViewModel extends ChangeNotifier {
     await refresh();
   }
 
-  /// Вызывается при выходе: убирает зеркала NG, локальные плейлисты остаются.
   Future<void> clearNgPlaylists() async {
     isLoggedIn = false;
     final mirrors = playlists.where((p) => p.ngId != null).toList();
@@ -467,18 +403,9 @@ class LibraryViewModel extends ChangeNotifier {
     await refresh();
   }
 
-  // ─── Сверка избранного с NG ──────────────────────────────────────
 
-  /// Одноразовая сверка старых сердечек с аккаунтом NG.
-  ///
-  /// Колонка `is_ng` появилась в v3 базы, и всё сохранённое до неё выглядит
-  /// локальным — даже то, что реально ушло на сайт. Прочитать список избранного
-  /// с NG нельзя, но статус по одному треку — можно, поэтому проверяем
-  /// точечно и один раз: запрос на трек недешёвый.
   static const _reconcileFlag = 'fav_ng_reconciled_v3';
 
-  /// Каждая проверка — запрос страницы трека, так что сверка намеренно
-  /// ограничена: больше всё равно не угадать — список избранного NG закрыт.
   static const _reconcileLimit = 30;
 
   Future<void> _reconcileNgFavorites() async {
@@ -495,7 +422,6 @@ class LibraryViewModel extends ChangeNotifier {
     var changed = false;
     for (final f in stale) {
       final onNg = await _repo.getFavoriteStatus(f.trackId);
-      // null — не получилось спросить: оставляем как есть и пробуем потом.
       if (onNg == null) return;
       if (onNg) {
         await _db.setFavoriteIsNg(f.trackId, true);

@@ -1,7 +1,3 @@
-// Смоук-тесты ретро-виджетов Newgrounds 2015.
-//
-// Полное приложение здесь не поднимается: ему нужны провайдеры, БД и плеер.
-// Проверяем слой UI, который редизайнится.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,7 +56,6 @@ void main() {
     ));
 
     await tester.tap(find.text('Song Title'));
-    // автор теперь строкой «by SomeArtist» под названием
     await tester.tap(find.textContaining('SomeArtist'));
     expect(track, 1);
     expect(artist, 1);
@@ -90,8 +85,6 @@ void main() {
 
     await tester.pumpWidget(build(true));
     await tester.pumpAndSettle();
-    // Свёрнутая секция схлопывается до одного заголовка: AnimatedCrossFade
-    // держит строки в дереве, но места они не занимают.
     expect(find.text('LOCAL'), findsOneWidget);
     final collapsedHeight = tester.getSize(find.byType(NgSection)).height;
     expect(collapsedHeight, lessThan(expandedHeight));
@@ -136,7 +129,6 @@ void main() {
             result = await showNgCreatePlaylistDialog(
               context,
               canUseNg: false,
-              // Предвыбор NG должен быть проигнорирован без сессии.
               target: PlaylistTarget.newgrounds,
             );
           },
@@ -168,15 +160,11 @@ void main() {
     );
     expect(fav.toMap()['is_ng'], 1);
     expect(Favorite.fromMap(fav.toMap()).isNg, isTrue);
-    // Строки из базы v2 колонки не имеют — такие сердечки считаются локальными.
     final legacy = Map<String, dynamic>.from(fav.toMap())..remove('is_ng');
     expect(Favorite.fromMap(legacy).isNg, isFalse);
   });
 
   testWidgets('выделенная плашка навбара подкрашена акцентом', (tester) async {
-    // 2024: у выделенной плашки линия в полную яркость акцента + градиентная
-    // подсветка снизу; у неактивной — та же линия, но приглушённая (alpha
-    // 0.45, т.к. без progress у соседей activation = 0).
     Widget build(int index) => _wrap(NgNavPlates(
           labels: const ['Featured', 'New'],
           index: index,
@@ -193,7 +181,6 @@ void main() {
       );
       if (plates.isEmpty) return null;
       final plate = plates.first;
-      // Достаём Container.decoration через дерево.
       final containerFinder = find.descendant(
         of: find.byWidget(plate),
         matching: find.byType(Container),
@@ -218,10 +205,7 @@ void main() {
 
     expect(selected, isNotNull);
     expect(idle, isNotNull);
-    // Выделенная — синяя полной яркости.
     expect(selected!.b, greaterThan(selected.r));
-    // Невыделенная — тоже цветная (красный акцент), но приглушённая:
-    // alpha 0.45 → смешение с чёрным фоном, R всё равно доминирует.
     expect(idle!.r, greaterThan(idle.b));
     expect(idle.a, closeTo(0.45, 0.01));
   });

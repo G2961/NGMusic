@@ -1,6 +1,3 @@
-// Разведка v3: свой отзыв на странице отзывов (входит ли g2961 в карточку),
-// сравнение отдачи с кукой и без, и ответы форм edit/delete.
-// Запуск: dart run tools/review_probe3.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -31,7 +28,6 @@ void scan(String label, String b) {
       print(block.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' '));
     }
   }
-  // Формы/ссылки edit/delete и userkey-инпуты.
   for (final m in RegExp(
           r'<form[^>]*action="[^"]*(review|edit|delete)[^"]*"[^>]*>|<input[^>]*name="userkey"[^>]*>',
           caseSensitive: false)
@@ -48,14 +44,12 @@ Future<void> main(List<String> args) async {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
-  // С кукой: на своей карточке должны появиться кнопки Edit/Delete.
   final auth = await http.get(
       Uri.parse('https://www.newgrounds.com/reviews/portal/$trackId/3/date/1'),
       headers: headers(cookie));
   print('auth page -> ${auth.statusCode}');
   scan('WITH cookie', auth.body);
 
-  // Страница трека: есть ли там форма «edit your review» или «you reviewed this».
   final listen = await http.get(
       Uri.parse('https://www.newgrounds.com/audio/listen/$trackId'),
       headers: headers(cookie));

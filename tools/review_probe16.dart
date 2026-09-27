@@ -1,6 +1,3 @@
-// Разведка v16: отдаёт ли reaction-totals число при isAjaxRequest —
-// печатаем область вокруг <a class="reaction-totals"> в AJAX-ответе.
-// Запуск: dart run tools/review_probe16.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -22,7 +19,6 @@ Future<void> main(List<String> args) async {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
-  // AJAX-пагинация отзывов — тот же URL, что и обычный, но с isAjaxRequest.
   final r = await http.get(
       Uri.parse(
           'https://www.newgrounds.com/reviews/portal/$trackId/3/date/1?isAjaxRequest=1'),

@@ -15,12 +15,6 @@ import 'login_screen.dart';
 import 'player_screen.dart';
 import 'playlist_screen.dart';
 
-/// Библиотека в вёрстке Newgrounds 2015: полоса плашек `.navbar` вместо
-/// переключателя вкладок и один под (`#main>div`) на весь экран, внутри —
-/// строки `table.audiolist tr`.
-///
-/// Аудио-портал 2015 носил зелёный скин (`body.green`), поэтому поды и
-/// чередование строк здесь зелёные — как в хабе.
 const _skin = NgSkin.gold;
 
 class LibraryScreen extends StatefulWidget {
@@ -40,8 +34,6 @@ class _LibraryScreenState extends State<LibraryScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: _tabLabels.length, vsync: this);
-    // Подсветка от позиции анимации, а не от `index`: тот меняется только
-    // когда свайп устоялся, и плашка загоралась с задержкой.
     _tab.animation!.addListener(_onTabAnim);
   }
 
@@ -64,8 +56,6 @@ class _LibraryScreenState extends State<LibraryScreen>
     final landscape = MediaQuery.of(context).size.width >
         MediaQuery.of(context).size.height;
 
-    // Ошибки операций с NG показываем снеком: тихо проглатывать их было
-    // главной причиной «ничего не работает, но и не ругается».
     final error = lvm.lastError;
     if (error != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -73,7 +63,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         context.read<LibraryViewModel>().clearError();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content:
-              Text(error, style: const TextStyle(color: ngWhite, fontSize: 12)),
+              Text(error, style: TextStyle(color: ngWhite, fontSize: 12)),
           backgroundColor: ngRed,
           behavior: SnackBarBehavior.floating,
           shape: const RoundedRectangleBorder(),
@@ -86,8 +76,6 @@ class _LibraryScreenState extends State<LibraryScreen>
       body: SafeArea(
         bottom: false,
         child: landscape
-            // Ландшафт — как хаб: слева стопка вкладок + мини-плеер внизу,
-            // справа контент вкладки. Горизонтальной полосы и свайпов нет.
             ? Column(
                 children: [
                   NgLogoBar(
@@ -132,7 +120,6 @@ class _LibraryScreenState extends State<LibraryScreen>
                   ),
                 ],
               )
-            // Портрет: полоса плашек сверху, свайпы между вкладками.
             : Column(
                 children: [
                   NgLogoBar(
@@ -167,7 +154,6 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
-  /// Контент текущей вкладки для ландшафта — без TabBarView.
   Widget get tabContent => _idx == 0
       ? _PlaylistsTab(lvm: context.read<LibraryViewModel>(),
           onCreate: _showCreatePlaylist)
@@ -175,10 +161,8 @@ class _LibraryScreenState extends State<LibraryScreen>
           lvm: context.read<LibraryViewModel>(),
           vm: context.read<NgViewModel>());
 
-  /// Переключение вкладки кликом по плашке (в ландшафте свайпов нет).
   void _goTo(int i) => _tab.animateTo(i);
 
-  /// Тап по профилю в шапке — на экран аккаунта (как в хабе).
   void _onUserTap(BuildContext context, NgViewModel vm) {
     final user = vm.currentUser;
     if (user != null) {
@@ -190,9 +174,6 @@ class _LibraryScreenState extends State<LibraryScreen>
     }
   }
 
-  /// Новый плейлист: имя + выбор, где его создать. Вариант Newgrounds
-  /// доступен только после входа. Сам диалог общий со всплывашкой
-  /// добавления трека — см. `ng_playlist_dialogs.dart`.
   Future<void> _showCreatePlaylist() async {
     final lvm = context.read<LibraryViewModel>();
     final result = await showNgCreatePlaylistDialog(
@@ -205,7 +186,6 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 }
 
-// ─── Вкладка «Playlists» ──────────────────────────────────────────
 
 class _PlaylistsTab extends StatelessWidget {
   final LibraryViewModel lvm;
@@ -275,7 +255,6 @@ class _PlaylistsTab extends StatelessWidget {
   }
 }
 
-/// Строка плейлиста: иконка папки (локальный) или Пико (зеркало NG).
 class _PlaylistRow extends StatelessWidget {
   final int index;
   final Playlist playlist;
@@ -344,7 +323,6 @@ class _PlaylistRow extends StatelessWidget {
   }
 }
 
-// ─── Вкладка «Favorites» ──────────────────────────────────────────────────────
 
 class _FavoritesTab extends StatelessWidget {
   final LibraryViewModel lvm;
@@ -379,8 +357,6 @@ class _FavoritesTab extends StatelessWidget {
         ),
       );
     } else {
-      // Сердечки приложения и сердечки аккаунта NG — разные списки: первые
-      // живут только в базе, вторые есть и на сайте (см. LocalDb, колонка is_ng).
       body = ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -452,7 +428,6 @@ class _FavoriteRow extends StatelessWidget {
   final int index;
   final Favorite favorite;
 
-  /// Очередь плеера — только та секция, в которой нажали.
   final List<Favorite> queue;
   final LibraryViewModel lvm;
   final NgViewModel vm;
@@ -478,6 +453,8 @@ class _FavoriteRow extends StatelessWidget {
       artist: favorite.artist,
       playing: isActive,
       paused: isActive && !vm.isPlaying,
+      onIconTap: () =>
+          isActive ? vm.togglePlayPause() : vm.playTrack(track),
       onTap: () {
         vm.setQueueContext(queue.map(LocalDb.favoriteToTrack).toList());
         vm.playTrack(track);

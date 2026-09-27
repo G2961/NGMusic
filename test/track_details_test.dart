@@ -1,5 +1,3 @@
-// Парсинг страницы трека `/audio/listen/{id}` на сохранённой копии — без сети.
-// Разметку проверяли по живой странице (см. test/fixtures) и по ng2015/audioData.js.
 
 import 'dart:io';
 
@@ -17,7 +15,6 @@ Track _blank() => Track(
       audioType: 3,
     );
 
-/// Фикстура 1572356 — id финален, поэтому отдельный конструктор.
 Track _legacy() => Track(
       id: '1572356',
       title: 'Xenoglossy',
@@ -56,9 +53,6 @@ void main() {
 
     NgRepository().parseListenDetails(track, html);
 
-    // NG прячет оценку, пока голосов меньше пяти: вместо звёзд —
-    // «Waiting for 3 more votes». Парсер должен сохранить остаток
-    // и не оставить фейковый score с прошлого парсинга.
     expect(track.votesPending, 3);
     expect(track.score, isNull);
     expect(track.listens, '96');
@@ -92,6 +86,84 @@ void main() {
     ''');
 
     expect(track.tags, ['8bit', 'chiptune']);
+  });
+
+  test('теги 2026: search/conduct/audio?match=tags разбираются', () {
+    final track = _blank();
+    NgRepository().parseListenDetails(track, '''
+      <dl class="sidestats flex-1">
+        <dt class="tags">Tags</dt>
+        <dd class="tags">
+          <ul>
+            <li><a href="https://www.newgrounds.com/search/conduct/audio?match=tags&amp;tags=classical">classical</a></li>
+            <li><a href="https://www.newgrounds.com/search/conduct/audio?match=tags&amp;tags=orchestral">orchestral</a></li>
+          </ul>
+        </dd>
+      </dl>
+    ''');
+
+    expect(track.tags, ['classical', 'orchestral']);
+  });
+
+  test('теги со сохранённой страницы Holy Knight Yusto', () {
+    final html =
+        File('test/fixtures/listen_yusto.html').readAsStringSync();
+    final track = _blank();
+
+    NgRepository().parseListenDetails(track, html);
+
+    expect(track.tags, contains('classical'));
+    expect(track.tags, contains('orchestral'));
+  });
+
+  test('Author Comments: HTML с картинками сохраняется вместе с текстом', () {
+    final html =
+        File('test/fixtures/listen_1572356.html').readAsStringSync();
+    final track = _legacy();
+
+    NgRepository().parseListenDetails(track, html);
+
+    expect(track.descriptionHtml, isNotNull);
+    expect(track.descriptionHtml, contains('<p>'));
+    expect(track.descriptionHtml,
+        contains('https://img.ngfiles.com/image-uploads/'));
+    expect(
+        RegExp('iu_1601784_20599008.webp').hasMatch(track.descriptionHtml!),
+        isTrue);
+    expect(track.description, contains('random garba'));
+    expect(track.description, isNot(contains('img.ngfiles.com')));
+  });
+
+  test('поиск по ID: страница listen разбирается в трек', () {
+    final html =
+        File('test/fixtures/listen_1572356.html').readAsStringSync();
+    final repo = NgRepository();
+    final t = repo.trackFromListenPage('1572356', html);
+
+    expect(t, isNotNull);
+    expect(t!.id, '1572356');
+    expect(t.title, 'DPI-filtration');
+    expect(t.artist, 'H31072');
+    expect(t.iconUrl, contains('aicon.ngfiles.com'));
+    expect(t.mp3Url, contains('audio.ngfiles.com'));
+
+    repo.enrichFromHtml(t, html);
+    expect(t.listens, '3,754');
+    expect(t.score, '4.78');
+    expect(t.genre, 'Hip Hop - Olskool');
+    expect(t.uploaded, 'May 27, 2026');
+    expect(t.descriptionHtml, isNotNull);
+  });
+
+  test('мой голос парсится из checked-радио votebar-а', () {
+    final html = File('test/fixtures/listen_voted.html').readAsStringSync();
+    final repo = NgRepository();
+
+    expect(repo.parseMyVote(html), 10);
+
+    final noVote =
+        File('test/fixtures/listen_1572356.html').readAsStringSync();
+    expect(repo.parseMyVote(noVote), isNull);
   });
 
   test('обложка отдаётся кандидатами от _raw.png к превью', () {

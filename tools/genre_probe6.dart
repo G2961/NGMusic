@@ -1,6 +1,3 @@
-// Разведка v23: сверка жанров — треки metal-rock правда метальные?
-// Берём жанр первого трека из dd-полей по-другому + сравниваем выборки
-// групп и поджанров на пересечение ID. Запуск: dart run tools/genre_probe6.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -30,7 +27,6 @@ Future<void> main() async {
   print('metal ∩ country:    $overlapMC (ожидаемо 0)');
   print('easy ∩ country:     $overlapEC (ожидаемо 0)');
 
-  // Жанры треков в выборке metal — через карточки (span с жанром).
   final r = await http.get(
       Uri.parse('https://www.newgrounds.com/audio/browse/genre/metal-rock'),
       headers: {'User-Agent': ua});

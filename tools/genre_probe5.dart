@@ -1,12 +1,9 @@
-// Разведка v22: slug-жанры. Проверяем /audio/browse/genre/<slug> и наличие
-// поджанров в разметке. Запуск: dart run tools/genre_probe5.dart
 import 'package:http/http.dart' as http;
 
 const ua =
     'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36';
 
 Future<void> main() async {
-  // 1. Группа по slug.
   final r = await http.get(
       Uri.parse('https://www.newgrounds.com/audio/browse/genre/metal-rock'),
       headers: {'User-Agent': ua});
@@ -22,7 +19,6 @@ Future<void> main() async {
       .toList();
   print('треков: ${ids.length}, первые: ${ids.take(5)}');
 
-  // 2. Поджанры: ищем submenu метал-рока.
   final b = r.body;
   final i = b.indexOf('Heavy Metal');
   if (i > 0) {

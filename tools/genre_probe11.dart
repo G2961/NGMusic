@@ -1,5 +1,3 @@
-// Разведка v28: подбираем числовые ID поджанров перебором genre=N
-// и сверкой жанров карточек. Запуск: dart run tools/genre_probe11.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -16,8 +14,6 @@ Future<Set<String>> genresOf(int n) async {
 }
 
 Future<void> main() async {
-  // Известно: 15=Heavy Metal, 4=Country, 5=Ambient(?), 7=Drum N Bass(?).
-  // Пробегаем 1..70 и пишем карту. Фильтр пустых (не-жанр) ответов — по жанрам карточек.
   for (var n = 1; n <= 70; n++) {
     final g = await genresOf(n);
     if (g.isEmpty) continue;

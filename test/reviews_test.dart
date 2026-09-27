@@ -1,5 +1,3 @@
-// Разбор отзывов и ответа голосования — на фрагментах живой разметки NG,
-// без сети (проверено запросами из tools/review_probe.dart).
 
 import 'dart:convert';
 
@@ -34,12 +32,9 @@ void main() {
     expect(items[0].author, 'Exlord');
     expect(items[0].avatarUrl, isNotEmpty);
     expect(items[0].score, 4.5);
-    // Дата сокращается до «месяц число, год».
     expect(items[0].date, 'May 2, 2026');
-    // Сущности и теги вычищены.
     expect(items[0].body, "Great & 'dark' track, love <it>");
 
-    // Вторая карточка — без звёзд: score 0.
     expect(items[1].score, 0);
     expect(items[1].hasScore, isFalse);
     expect(items[1].body, 'Not bad');
@@ -61,8 +56,6 @@ void main() {
   });
 
   test('vote-ответ: score/votes из sidestats, waiting-флаг', () {
-    // sidestats — HTML-фрагмент внутри JSON; эскейпим через jsonEncode,
-    // чтобы фикстура была честной.
     String voteBody(String sidestats) =>
         jsonEncode({'success': true, 'sidestats': sidestats});
 
@@ -81,7 +74,6 @@ void main() {
     expect(res2.score, isNull);
     expect(res2.pendingVotes, 4);
 
-    // Без sidestats — не ошибка, просто сказать нечего.
     expect(repo.parseVoteResponsePublic('{"success":false}'), isNull);
   });
 }

@@ -8,13 +8,8 @@ import '../../viewmodel/ng_viewmodel.dart';
 import '../theme/ng_theme.dart';
 import '../widgets/add_to_playlist_sheet.dart';
 import '../widgets/ng_retro.dart';
-import 'login_screen.dart';
 import 'player_screen.dart';
 
-/// Строка трека на странице автора: `table.audiolist tr` с иконками действий.
-///
-/// Общая для короткого списка на самой странице и для полного списка в
-/// [ArtistAudioScreen], поэтому вынесена из `artist_screen.dart`.
 class ArtistTrackRow extends StatefulWidget {
   final int index;
   final Track track;
@@ -37,35 +32,28 @@ class _ArtistTrackRowState extends State<ArtistTrackRow> {
   bool _downloading = false;
 
   Future<void> _onFavTap(NgViewModel vm, LibraryViewModel lvm) async {
-    if (vm.currentUser == null) {
-      final doLogin = await showDialog<bool>(
-        context: context,
-        barrierColor: ngBlack.withValues(alpha: 0.72),
-        builder: (_) => NgLoginPromptDialog(
-          message: 'Log in to save favorites.',
-          skin: widget.skin,
-        ),
-      );
-      if (doLogin == true && mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-        if (mounted) await context.read<NgViewModel>().fetchUser();
-      }
-      return;
-    }
+    final toNg = await lvm.favGoesToNg();
     final ok = await lvm.toggleFavorite(widget.track);
-    if (!mounted || ok) return;
-    final error = lvm.lastError;
-    lvm.clearError();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(error ?? 'Failed to save favorite',
-          style: const TextStyle(color: ngWhite, fontSize: 12)),
-      backgroundColor: ngRed,
-      behavior: SnackBarBehavior.floating,
-      shape: const RoundedRectangleBorder(),
-    ));
+    if (!mounted) return;
+    if (!ok) {
+      final error = lvm.lastError;
+      lvm.clearError();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error ?? 'Failed to save favorite',
+            style: TextStyle(color: ngWhite, fontSize: 12)),
+        backgroundColor: ngRed,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ));
+    } else if (!toNg) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Saved to local favorites',
+            style: TextStyle(color: ngWhite, fontSize: 12)),
+        backgroundColor: ngOrange,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ));
+    }
   }
 
   @override
@@ -83,10 +71,11 @@ class _ArtistTrackRowState extends State<ArtistTrackRow> {
       iconUrl: t.aIconUrl,
       title: t.title,
       genre: t.genre,
-      // Автора не дублируем — это его собственная страница.
       artist: '',
       playing: isActive,
       paused: isActive && !vm.isPlaying,
+      onIconTap: () =>
+          isActive ? vm.togglePlayPause() : vm.playTrack(t),
       onTap: () {
         vm.setQueueContext(widget.allTracks);
         vm.playTrack(t);
@@ -137,7 +126,6 @@ class _ArtistTrackRowState extends State<ArtistTrackRow> {
   }
 }
 
-/// Диалог «нужен вход» в виде пода 2015.
 class NgLoginPromptDialog extends StatelessWidget {
   final String message;
   final NgSkin skin;

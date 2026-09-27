@@ -11,12 +11,6 @@ import '../../main.dart' show NgMiniPlayer;
 import 'artist_screen.dart';
 import 'login_screen.dart';
 
-/// Страница аккаунта в вёрстке Newgrounds 2015: чёрная шапка с логотипом,
-/// серая колонка `#main` и поды — `Account` (аватар, ник, `table.itemdetails`)
-/// и `Settings` (строки `table.audiolist tr` с кнопками справа).
-///
-/// Аудио-портал 2015 носил зелёный скин (`body.green`) — поды здесь зелёные,
-/// как в хабе и плеере.
 const _skin = NgSkin.gold;
 
 class AccountScreen extends StatefulWidget {
@@ -68,7 +62,13 @@ class _AccountScreenState extends State<AccountScreen>
         child: NgLoading(),
       );
     } else if (user == null) {
-      content = _LoggedOutPod(onLogin: _login);
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _LoggedOutPod(onLogin: _login),
+          if (!landscape) _SettingsPod(),
+        ],
+      );
     } else {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,9 +98,6 @@ class _AccountScreenState extends State<AccountScreen>
                   user == null ? _login : () => _openProfile(user.username),
             ),
             Expanded(
-              // Ландшафт: слева стопка вкладок Account/Settings + мини-плеер,
-              // справа контент выбранной вкладки (свайпов нет). Портрет:
-              // обычная колонка подов, настройки — под профилем.
               child: landscape
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,14 +149,9 @@ class _AccountScreenState extends State<AccountScreen>
     );
   }
 
-  // ── Действия ───────────────────────────────────────────────────────────────
 
-  /// Контент правой панели в ландшафте: вкладка [i] — отдельный «экран».
-  /// Когда пользователь не вошёл, обе вкладки показывают под логина.
   Widget _pane(bool landscape, Widget loggedOutOrLoading) {
-    final vm = context.read<NgViewModel>();
-    final user = vm.currentUser;
-    if (_idx == 0 || user == null) {
+    if (_idx == 0) {
       return SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(6, 8, 6, 12),
         child: Column(
@@ -211,7 +203,7 @@ class _AccountScreenState extends State<AccountScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Are you sure you want to log out?', style: ngBody),
+              Text('Are you sure you want to log out?', style: ngBody),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -239,8 +231,6 @@ class _AccountScreenState extends State<AccountScreen>
     if (!mounted) return;
     await lvm.clearNgPlaylists();
     if (!mounted) return;
-    // Экран живёт и как вкладка `IndexedStack`, и как отдельный роут —
-    // `maybePop` закрывает только второй случай.
     Navigator.maybePop(context);
   }
 
@@ -252,7 +242,6 @@ class _AccountScreenState extends State<AccountScreen>
   }
 }
 
-// ── Не вошёл ─────────────────────────────────────────────────────────────────
 
 class _LoggedOutPod extends StatelessWidget {
   final VoidCallback onLogin;
@@ -279,7 +268,6 @@ class _LoggedOutPod extends StatelessWidget {
   }
 }
 
-// ── Вошёл: аватар, ник, кнопки, `table.itemdetails` ──────────────────────────
 
 class _ProfilePod extends StatelessWidget {
   final NgUser user;
@@ -371,7 +359,6 @@ class _ProfilePod extends StatelessWidget {
     );
   }
 
-  /// Подпись под ником: уровень, если профиль его отдал.
   String get _caption =>
       user.level != null ? 'Level ${user.level}' : 'Newgrounds member';
 
@@ -408,12 +395,10 @@ class _ProfilePod extends StatelessWidget {
   }
 }
 
-/// Аватар 2015 — квадрат в рамке, без скруглений.
 class _SquareAvatar extends StatelessWidget {
   final String? url;
   const _SquareAvatar({this.url});
 
-  /// `div.podtop`-аватарки 2015 — 58×58 в рамке 1px.
   static const _size = 58.0;
 
   @override
@@ -421,7 +406,7 @@ class _SquareAvatar extends StatelessWidget {
     return Container(
       width: _size,
       height: _size,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: ngBrown)),
       ),
@@ -432,7 +417,90 @@ class _SquareAvatar extends StatelessWidget {
   }
 }
 
-// ── Настройки ────────────────────────────────────────────────────────────────
+
+class _ThemeCard extends StatelessWidget {
+  final NgDesign mode;
+  final int index;
+  final bool selected;
+  final VoidCallback onSelect;
+
+  const _ThemeCard({
+    required this.mode,
+    required this.index,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(11, 0, 11, 8),
+      child: Material(
+        color: selected ? ngRowAlt : ngBlack,
+        child: InkWell(
+          onTap: selected ? null : onSelect,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.fromBorderSide(BorderSide(
+                color: selected ? ngGold : ngPodBorder,
+                width: selected ? 2 : 1,
+              )),
+            ),
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.hardEdge,
+                    child: Image.asset(
+                      mode.previewAsset,
+                      width: 400,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        mode.label,
+                        style: selected
+                            ? ngLink.copyWith(color: ngWhite)
+                            : ngLink,
+                      ),
+                    ),
+                    if (selected)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Active', style: ngLabel.copyWith(color: ngGold)),
+                          const SizedBox(width: 4),
+                          Image.asset(NgTex.a15('check'),
+                              width: 12, height: 12,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox(width: 12, height: 12)),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(mode.hint, style: ngLabel),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _SettingsPod extends StatelessWidget {
   const _SettingsPod();
@@ -452,8 +520,29 @@ class _SettingsPod extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(11, 2, 11, 10),
+          Padding(
+            padding: EdgeInsets.fromLTRB(11, 2, 11, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Design', style: ngH3),
+                SizedBox(height: 4),
+                Text(
+                  'Switch between the classic 2015 look and the modern one.',
+                  style: ngBodySmall,
+                ),
+              ],
+            ),
+          ),
+          for (final mode in NgDesign.values)
+            _ThemeCard(
+              mode: mode,
+              index: NgDesign.values.indexOf(mode),
+              selected: themeCtl.mode == mode,
+              onSelect: () => themeCtl.setMode(mode),
+            ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(11, 10, 11, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -487,8 +576,6 @@ class _SettingsPod extends StatelessWidget {
   }
 }
 
-/// Строка-переключатель: подпись слева, кнопка выбора справа. Выбранный
-/// вариант подсвечен фоном шапки пода, кнопка у него погашена.
 class _OptionRow extends StatelessWidget {
   final int index;
   final String label;

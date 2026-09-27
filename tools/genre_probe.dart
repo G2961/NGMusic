@@ -1,5 +1,3 @@
-// Разведка v18: реальные ID жанров из разметки самого NG (sidebar аудио).
-// Запуск: dart run tools/genre_probe.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -11,7 +9,6 @@ Future<void> main() async {
   print('audio home -> ${r.statusCode} len=${r.body.length}');
   final b = r.body;
 
-  // Все ссылки с genre= или /genre/
   final links = <String>{};
   for (final m
       in RegExp(r'href="([^"]*genre[^"]*)"').allMatches(b)) {

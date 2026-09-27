@@ -1,6 +1,3 @@
-// Разведка v35: поджанры Podcasts/VA ищем в select с другим name
-// (categories?). Дампим ВСЕ select со страницы browse.
-// Запуск: dart run tools/genre_probe17.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -22,7 +19,6 @@ Future<void> main() async {
     print('SELECT $name: ${options.length} опций: ${options.take(12).toList()}');
   }
 
-  // Voice acting: ищем прямо в HTML.
   final i = b.indexOf('Voice Acting');
   print('\nVoice Acting idx=$i');
   if (i > 0) {

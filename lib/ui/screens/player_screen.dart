@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:html/dom.dart' as dom;
+import 'package:html/parser.dart' as html_parser;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -17,11 +19,8 @@ import '../widgets/ng_retro.dart';
 import 'artist_screen.dart';
 import 'login_screen.dart';
 
-/// Аудио-портал 2015 носил зелёный скин (`body.green`) — поды здесь зелёные.
 const _skin = NgSkin.gold;
 
-/// Полноэкранный плеер: блок `.ngp` флеш-плеера 2015 (сцена + бар с транспортом)
-/// плюс два пода под ним — статистика трека и автор.
 class PlayerScreen extends StatelessWidget {
   const PlayerScreen({super.key});
 
@@ -32,13 +31,6 @@ class PlayerScreen extends StatelessWidget {
     final landscape = MediaQuery.of(context).size.width >
         MediaQuery.of(context).size.height;
 
-    // Верхняя часть страницы. В ландшафте — как старый YouTube:
-    // слева плеер, справа сверху блок автора (с подпиской), под ним
-    // Credits & Info, под ним награда (Frontpaged) с датой.
-    // Вся верхняя секция жёстко вписана в видимую высоту экрана:
-    //   экран − статус-бар − шапка 56 − верхний паддинг 8 − зазор 6.
-    // Левый плеер тянется на неё всю (обложка добирает остаток), правая
-    // колонка при нехватке места равномерно сжимается (FittedBox).
     final playerBlock = _PlayerPod(vm: vm, track: track);
     final creditsBlock = track == null
         ? const NgPod(
@@ -51,14 +43,10 @@ class PlayerScreen extends StatelessWidget {
 
     final Widget top;
     if (landscape && track != null) {
-      // Вся верхняя секция вписана в видимую высоту:
-      //   экран − статус-бар − шапка 56 − верхний паддинг 8 − зазор 6.
-      // Левому плееру остаётся ровно topH (обложка добирает остаток минус бары),
-      // правая колонка при переполнении скроллится — без FittedBox, который
-      // пересчитывал масштаб при догрузке данных (блок «прыгал»).
       final m = MediaQuery.of(context);
       final topH =
           (m.size.height - m.padding.top - 56 - 8 - 6).clamp(180.0, m.size.height);
+      final chrome = themeCtl.textured ? 73 : 45;
       top = SizedBox(
         height: topH,
         child: Row(
@@ -69,10 +57,7 @@ class PlayerScreen extends StatelessWidget {
               child: _PlayerPod(
                 vm: vm,
                 track: track,
-                // Сцена = обложка + бары 92 + рамки 2; сверху под добавляет
-                // шапку 36 (35+1), паддинг 8 и нижнюю границу 1. Итого 139 —
-                // иначе под вылезает на пиксель за отведённую высоту.
-                artHeight: topH - 139,
+                artHeight: topH - chrome - 94,
               ),
             ),
             const SizedBox(width: 8),
@@ -114,11 +99,7 @@ class PlayerScreen extends StatelessWidget {
           children: [
             _TopBar(track: track),
             Expanded(
-              // Ключ форсирует полный ребилд при смене трека, иначе в дочерних
-              // виджетах остаётся старый автор/название.
               key: ValueKey(track?.id),
-              // Поды стоят на серой колонке `#main`, иначе их чёрные рамки
-              // сливаются с фоном и блоки ломают композицию.
               child: NgPageColumn(
                 padding: EdgeInsets.zero,
                 child: SingleChildScrollView(
@@ -127,14 +108,15 @@ class PlayerScreen extends StatelessWidget {
                     children: [
                       top,
                       if (track != null) ...[
-                        // В ландшафте трофей уже в правой колонке, под Credits.
                         if (!(landscape && track.awards.isNotEmpty))
                           if (track.awards.isNotEmpty) _TrophyPod(track: track),
-                        if (track.description != null)
-                          _TextPod(
+                        if (track.descriptionHtml != null ||
+                            track.description != null)
+                          _AuthorCommentsPod(
                             icon: 'doc',
                             title: 'Author Comments',
-                            text: track.description!,
+                            html: track.descriptionHtml,
+                            fallbackText: track.description,
                           ),
                         _ReviewsPod(track: track),
                       ],
@@ -150,9 +132,7 @@ class PlayerScreen extends StatelessWidget {
   }
 }
 
-// ── Диалоги в стиле пода ──────────────────────────────────────────────────────
 
-/// Окно «нужен логин»: под с текстом и двумя кнопками 2015.
 Future<void> _requireLogin(
   BuildContext context,
   NgViewModel vm,
@@ -207,7 +187,7 @@ Future<void> _requireLogin(
 
 void _showNgSnack(BuildContext context, String text, {bool ok = true}) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+    content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
     backgroundColor: ok ? ngOrange : ngRed,
     behavior: SnackBarBehavior.floating,
     shape: const RoundedRectangleBorder(),
@@ -215,7 +195,6 @@ void _showNgSnack(BuildContext context, String text, {bool ok = true}) {
   ));
 }
 
-// ── Шапка ─────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatefulWidget {
   final Track? track;
@@ -228,15 +207,16 @@ class _TopBar extends StatefulWidget {
 class _TopBarState extends State<_TopBar> {
   Future<void> _onFavTap(
       BuildContext context, NgViewModel vm, LibraryViewModel lvm) async {
-    if (vm.currentUser == null) {
-      await _requireLogin(context, vm, 'Log in to save favorites.');
-      return;
-    }
+    final toNg = await lvm.favGoesToNg();
     final ok = await lvm.toggleFavorite(widget.track!);
-    if (!context.mounted || ok) return;
-    final error = lvm.lastError;
-    lvm.clearError();
-    _showNgSnack(context, error ?? 'Failed to save favorite', ok: false);
+    if (!context.mounted) return;
+    if (!ok) {
+      final error = lvm.lastError;
+      lvm.clearError();
+      _showNgSnack(context, error ?? 'Failed to save favorite', ok: false);
+    } else if (!toNg) {
+      _showNgSnack(context, 'Saved to local favorites', ok: true);
+    }
   }
 
   @override
@@ -245,7 +225,7 @@ class _TopBarState extends State<_TopBar> {
 
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),
@@ -257,7 +237,6 @@ class _TopBarState extends State<_TopBar> {
             tooltip: 'Close player',
             onTap: () => Navigator.maybePop(context),
           ),
-          // Логотип сайта в самом верху, как в шапке NG
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
@@ -291,15 +270,11 @@ class _TopBarState extends State<_TopBar> {
   }
 }
 
-// ── Под плеера ────────────────────────────────────────────────────────────
 
-/// Шапка «иконка + название трека» и плашка «Download this song!» — точно как
-/// на `/audio/listen/{id}`; внутри — блок `.ngp`.
 class _PlayerPod extends StatefulWidget {
   final NgViewModel vm;
   final Track? track;
 
-  /// Ландшафт: точная высота обложки (остаток высоты сцены минус бары).
   final double? artHeight;
   const _PlayerPod({required this.vm, this.track, this.artHeight});
 
@@ -318,6 +293,9 @@ class _PlayerPodState extends State<_PlayerPod> {
       title: track?.title ?? 'Audio Player',
       skin: _skin,
       padding: const EdgeInsets.all(4),
+      margin: widget.artHeight != null
+          ? EdgeInsets.zero
+          : const EdgeInsets.only(bottom: 10),
       action: track == null
           ? null
           : NgPlateLink(
@@ -335,9 +313,7 @@ class _PlayerPodState extends State<_PlayerPod> {
   }
 }
 
-// ── Блок `.ngp` ──────────────────────────────────────────────────────────────
 
-/// Связывает [NgPlayerStage] с вьюмоделью — сама сцена о ней не знает.
 class _PlayerStage extends StatelessWidget {
   final NgViewModel vm;
   final Track? track;
@@ -370,13 +346,7 @@ class _PlayerStage extends StatelessWidget {
   }
 }
 
-// ── Секция деталей: жанр, теги, прослушивания, звёзды, шаринг ───────────────
 
-/// `div.contentdata` со страницы трека: слева жанр и теги, справа
-/// «N Plays | N Downloads», ниже звёзды и кнопки шаринга. Цифра оценки
-/// здесь не дублируется — она выше, в строке `Score`.
-///
-/// Живёт вторым `podcontent` внутри пода Credits & Info.
 class _DetailsSection extends StatelessWidget {
   final Track track;
   const _DetailsSection({required this.track});
@@ -413,10 +383,10 @@ class _DetailsSection extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Tags: ', style: ngLabel),
+              Text('Tags: ', style: ngLabel),
               Expanded(
                 child: track.tags.isEmpty
-                    ? const Text('None', style: ngLabel)
+                    ? Text('None', style: ngLabel)
                     : Text(
                         track.tags.join(', '),
                         style: ngLink.copyWith(fontWeight: FontWeight.normal),
@@ -438,7 +408,7 @@ class _DetailsSection extends StatelessWidget {
               else if (score > 0)
                 NgStars(score: score)
               else
-                const Text('Not rated yet', style: ngLabel),
+                Text('Not rated yet', style: ngLabel),
               const Spacer(),
               _ShareButton(
                 letter: 'f',
@@ -479,7 +449,6 @@ Future<void> _open(String url) async {
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
-/// Квадратная кнопка шаринга, как в футере сабмишена 2015.
 class _ShareButton extends StatelessWidget {
   final String letter;
   final Color color;
@@ -509,7 +478,7 @@ class _ShareButton extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             letter,
-            style: const TextStyle(
+            style: TextStyle(
               color: ngWhite,
               fontSize: 15,
               fontWeight: FontWeight.bold,
@@ -522,11 +491,7 @@ class _ShareButton extends StatelessWidget {
   }
 }
 
-// ── Награды (Frontpaged и прочие трофеи) ──────────────────────────────────────
 
-/// Как на странице 2015: иконка из спрайта `ul-trophies.png`, рядом название
-/// награды и дата. Одна награда — под без шапки, несколько — под «Trophies»
-/// со списком; в обоих случаях коробка закрывается снизу донышком пода.
 class _TrophyPod extends StatelessWidget {
   final Track track;
   const _TrophyPod({required this.track});
@@ -545,7 +510,6 @@ class _TrophyPod extends StatelessWidget {
       ],
     );
 
-    // Один трофей — без зелёной шапки, как в макете.
     if (track.awards.length == 1) {
       return NgPod(
         skin: _skin,
@@ -581,7 +545,7 @@ class _TrophyRow extends StatelessWidget {
             children: [
               Text(
                 award.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   color: ngWhite,
                   fontWeight: FontWeight.bold,
@@ -598,31 +562,406 @@ class _TrophyRow extends StatelessWidget {
   }
 }
 
-// ── Текстовые поды: Licensing Terms / Author Comments ───────────────────────
 
-class _TextPod extends StatelessWidget {
+class AuthorCommentsTestable extends StatelessWidget {
+  final String html;
+  const AuthorCommentsTestable({super.key, required this.html});
+
+  @override
+  Widget build(BuildContext context) => _AuthorCommentsPod(
+        icon: 'doc',
+        title: 'Author Comments',
+        html: html,
+      );
+}
+
+const _acWidth = 640.0;
+
+const _acMaxImgH = 340.0;
+
+class _AuthorCommentsPod extends StatefulWidget {
   final String icon;
   final String title;
-  final String text;
 
-  const _TextPod({
+  final String? html;
+
+  final String? fallbackText;
+
+  const _AuthorCommentsPod({
     required this.icon,
     required this.title,
-    required this.text,
+    this.html,
+    this.fallbackText,
   });
 
   @override
+  State<_AuthorCommentsPod> createState() => _AuthorCommentsPodState();
+}
+
+class _AuthorCommentsPodState extends State<_AuthorCommentsPod> {
+  static const _gap = 2.0;
+
+  static const _blankLine = 18.0;
+
+  final _links = <String>[];
+
+  List<Widget>? _blocks;
+
+  @override
+  void initState() {
+    super.initState();
+    _buildBlocks();
+  }
+
+  @override
+  void didUpdateWidget(_AuthorCommentsPod old) {
+    super.didUpdateWidget(old);
+    if (old.html != widget.html || old.fallbackText != widget.fallbackText) {
+      _buildBlocks();
+    }
+  }
+
+  void _buildBlocks() {
+    _links.clear();
+    _blocks = null;
+    final raw = widget.html;
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final fragment = html_parser.parseFragment(raw);
+        final blocks = _acBlocks(fragment.nodes);
+        if (blocks.isNotEmpty) _blocks = blocks;
+      } catch (_) {}
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    Widget content = _blocks != null
+        ? Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: _blocks!)
+        : Text(widget.fallbackText ?? '',
+            style: ngBody.copyWith(height: 1.45));
+
     return NgPod(
-      icon: icon,
-      title: title,
+      icon: widget.icon,
+      title: widget.title,
       skin: _skin,
-      child: Text(text, style: ngBody.copyWith(height: 1.45)),
+      child: content,
     );
+  }
+
+  List<Widget> _acBlocks(List<dom.Node> nodes) {
+    final out = <Widget>[];
+    final inline = <dom.Node>[];
+    var lastBlank = false;
+
+    void addBlank() {
+      if (out.isNotEmpty && !lastBlank) {
+        out.add(const SizedBox(height: _blankLine));
+        lastBlank = true;
+      }
+    }
+
+    void flush() {
+      if (inline.isEmpty) return;
+      final txt = _inlinePlainText(inline).trim();
+      if (txt.isNotEmpty) {
+        final span = _acInline(inline);
+        if (span != null) {
+          out.add(_acPara(span));
+          lastBlank = false;
+        }
+      } else if (inline.any((n) => n is dom.Element)) {
+        addBlank();
+      }
+      inline.clear();
+    }
+
+    for (final n in nodes) {
+      if (n is dom.Text) {
+        inline.add(n);
+      } else if (n is dom.Element) {
+        switch (n.localName) {
+          case 'script' || 'style' || 'noscript':
+            break;
+          case 'p':
+            flush();
+            final subs = _acParaWithImages(n);
+            if (subs.isEmpty) {
+              addBlank();
+            } else {
+              out.addAll(subs);
+              lastBlank = false;
+            }
+          case 'img':
+            final img = _acImage(n);
+            if (img != null) {
+              flush();
+              out.add(img);
+              lastBlank = false;
+            }
+          case 'blockquote':
+            flush();
+            out.add(_acQuote(n));
+            lastBlank = false;
+          case 'ul' || 'ol':
+            flush();
+            out.add(_acList(n));
+            lastBlank = false;
+          case 'pre':
+            flush();
+            final t = n.text.trim();
+            if (t.isNotEmpty) {
+              out.add(Padding(
+                padding: const EdgeInsets.only(bottom: _gap),
+                child: Text(t,
+                    style: ngBody.copyWith(height: 1.35, fontSize: 12)),
+              ));
+              lastBlank = false;
+            }
+          default:
+            inline.add(n);
+        }
+      }
+    }
+    flush();
+    if (out.isNotEmpty && out.last is SizedBox) out.removeLast();
+    return out;
+  }
+
+  List<Widget> _acParaWithImages(dom.Element el) {
+    final out = <Widget>[];
+    final inline = <dom.Node>[];
+    void flush() {
+      if (inline.isEmpty) return;
+      if (_inlinePlainText(inline).trim().isNotEmpty) {
+        final span = _acInline(inline);
+        if (span != null) out.add(_acPara(span));
+      }
+      inline.clear();
+    }
+
+    for (final n in el.nodes) {
+      if (n is dom.Element && n.localName == 'img') {
+        final img = _acImage(n);
+        if (img != null) {
+          flush();
+          out.add(img);
+        }
+      } else {
+        inline.add(n);
+      }
+    }
+    flush();
+    return out;
+  }
+
+  String _inlinePlainText(List<dom.Node> nodes) {
+    final buf = StringBuffer();
+    for (final n in nodes) {
+      if (n is dom.Text) {
+        buf.write(n.text);
+      } else if (n is dom.Element) {
+        if (n.localName == 'br') {
+          buf.write('\n');
+        } else if (n.localName != 'img') {
+          buf.write(_inlinePlainText(n.nodes));
+        }
+      }
+    }
+    return buf.toString();
+  }
+
+  Widget _acPara(InlineSpan span) => Padding(
+        padding: const EdgeInsets.only(bottom: _gap),
+        child: Text.rich(span, style: ngBody.copyWith(height: 1.45)),
+      );
+
+  Widget _acQuote(dom.Element el) => Container(
+        margin: const EdgeInsets.only(bottom: _gap, left: 2),
+        padding: const EdgeInsets.fromLTRB(9, 7, 9, 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFF14110E),
+          border: Border.fromBorderSide(BorderSide(color: ngHairline)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _acBlocks(el.nodes),
+        ),
+      );
+
+  Widget _acList(dom.Element el) {
+    final ordered = el.localName == 'ol';
+    final items = <Widget>[];
+    var i = 1;
+    for (final li in el.children.where((e) => e.localName == 'li')) {
+      final span = _acInline(li.nodes);
+      if (span == null) continue;
+      items.add(Padding(
+        padding: const EdgeInsets.only(bottom: 3),
+        child: Text.rich(
+          TextSpan(children: [
+            TextSpan(
+                text: ordered ? '${i++}. ' : '•  ',
+                style: ngBody.copyWith(color: ngDim)),
+            span,
+          ]),
+          style: ngBody.copyWith(height: 1.4),
+        ),
+      ));
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _gap, left: 6),
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: items),
+    );
+  }
+
+  Widget? _acImage(dom.Element el) {
+    final src = el.attributes['src'] ?? '';
+    if (!src.startsWith('https://img.ngfiles.com/')) return null;
+    Size? natural;
+    final wa = double.tryParse(el.attributes['width'] ?? '');
+    final ha = double.tryParse(el.attributes['height'] ?? '');
+    if (wa != null && ha != null && wa > 0 && ha > 0) {
+      natural = Size(wa, ha);
+    } else {
+      final smart = el.attributes['data-smart-scale'];
+      if (smart != null) {
+        final parts = smart.split(',');
+        final w = double.tryParse(parts[0].trim());
+        final h =
+            parts.length > 1 ? double.tryParse(parts[1].trim()) : null;
+        if (w != null && h != null && w > 0 && h > 0) natural = Size(w, h);
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _gap),
+      child: LayoutBuilder(builder: (context, cons) {
+        final avail = cons.maxWidth.isFinite ? cons.maxWidth : _acWidth;
+        return _AcImage(src: src, natural: natural, maxWidth: avail);
+      }),
+    );
+  }
+
+  InlineSpan? _acInline(List<dom.Node> nodes, {TextStyle? style}) {
+    TextStyle st(TextStyle Function(TextStyle) f) => f(style ?? ngBody);
+    final spans = <InlineSpan>[];
+    for (final n in nodes) {
+      if (n is dom.Text) {
+        final t = _acCollapse(n.text);
+        if (t.isNotEmpty) spans.add(TextSpan(text: t, style: style));
+      } else if (n is dom.Element) {
+        switch (n.localName) {
+          case 'br':
+            if (spans.isNotEmpty &&
+                spans.any((s) =>
+                    s is TextSpan && (s.text ?? '').trim().isNotEmpty)) {
+              spans.add(const TextSpan(text: '\n'));
+            }
+          case 'b' || 'strong':
+            final inner = _acInline(n.nodes,
+                style: st((s) => s.copyWith(fontWeight: FontWeight.bold)));
+            if (inner != null) spans.add(inner);
+          case 'i' || 'em':
+            final inner = _acInline(n.nodes,
+                style: st((s) => s.copyWith(fontStyle: FontStyle.italic)));
+            if (inner != null) spans.add(inner);
+          case 'u':
+            final inner = _acInline(n.nodes,
+                style:
+                    st((s) => s.copyWith(decoration: TextDecoration.underline)));
+            if (inner != null) spans.add(inner);
+          case 'a':
+            final href = n.attributes['href'] ?? '';
+            final inner = _acInline(n.nodes,
+                style: st((s) => s.copyWith(
+                    color: ngGold, decoration: TextDecoration.underline)));
+            if (inner == null) break;
+            if (href.isNotEmpty) {
+              final idx = _links.length;
+              _links.add(_acUrl(href));
+              spans.add(WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openLink(idx),
+                  child: Text.rich(inner,
+                      style: ngBody.copyWith(height: 1.45)),
+                ),
+              ));
+            } else {
+              spans.add(inner);
+            }
+          case 'img':
+            spans.add(const TextSpan(text: ' '));
+          default:
+            final inner = _acInline(n.nodes, style: style);
+            if (inner != null) spans.add(inner);
+        }
+      }
+    }
+    if (spans.isEmpty) return null;
+    return TextSpan(children: spans);
+  }
+
+  String _acUrl(String href) {
+    if (href.startsWith('//')) return 'https:$href';
+    if (href.startsWith('/')) return 'https://www.newgrounds.com$href';
+    return href;
+  }
+
+  Future<void> _openLink(int idx) async {
+    final url = _links[idx];
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  String _acCollapse(String t) => t.replaceAll(RegExp(r'\s+'), ' ');
+}
+
+class _AcImage extends StatelessWidget {
+  final String src;
+  final Size? natural;
+  final double maxWidth;
+
+  const _AcImage({required this.src, required this.maxWidth, this.natural});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget img = Image.network(
+      src,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    );
+    final nat = natural;
+    if (nat != null && nat.width > 0 && nat.height > 0) {
+      var w = nat.width;
+      var h = nat.height;
+      final maxW = maxWidth < _acWidth ? maxWidth : _acWidth;
+      final s1 = (maxW / w).clamp(0.0, 1.0);
+      w *= s1;
+      h *= s1;
+      if (h > _acMaxImgH) {
+        final s2 = _acMaxImgH / h;
+        w *= s2;
+        h = _acMaxImgH;
+      }
+      img = SizedBox(width: w, height: h, child: img);
+    } else {
+      img = ConstrainedBox(
+        constraints: const BoxConstraints(
+            maxWidth: _acWidth, maxHeight: _acMaxImgH),
+        child: img,
+      );
+    }
+    return Align(alignment: Alignment.centerLeft, child: img);
   }
 }
 
-// ── Credits & Info: метаданные сабмишена + секция деталей ──────────────────
 
 class _CreditsPod extends StatelessWidget {
   final Track track;
@@ -647,7 +986,6 @@ class _CreditsPod extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Первый `podcontent`: метаданные сабмишена
           Padding(
             padding: const EdgeInsets.fromLTRB(9, 7, 9, 8),
             child: Column(
@@ -678,7 +1016,6 @@ class _CreditsPod extends StatelessWidget {
               ],
             ),
           ),
-          // Второй `podcontent` того же пода: жанр, теги, статистика, шаринг
           const NgPodBreaker(),
           _DetailsSection(track: t),
         ],
@@ -687,7 +1024,6 @@ class _CreditsPod extends StatelessWidget {
   }
 }
 
-// ── Коробка автора: аватар, ник, разделитель, кнопка подписки ────────────
 
 class _AuthorPod extends StatefulWidget {
   final Track track;
@@ -719,8 +1055,6 @@ class _AuthorPodState extends State<_AuthorPod> {
   Future<void> _loadFollowStatus() async {
     final artist = widget.track.artist;
     if (artist.isEmpty) return;
-    // Статус читается только по классу `active` на кнопке favefollow;
-    // null остаётся, когда определить не удалось, и кнопка не врёт.
     final status = await NgRepository().getFollowStatus(artist);
     if (mounted) setState(() => _followed = status);
   }
@@ -777,7 +1111,7 @@ class _AuthorPodState extends State<_AuthorPod> {
               child: Container(
                 width: 34,
                 height: 34,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: ngBlack,
                   border: Border.fromBorderSide(BorderSide(color: ngBrown)),
                 ),
@@ -825,8 +1159,6 @@ class _AuthorPodState extends State<_AuthorPod> {
   }
 }
 
-/// ID сабмишена NG (числом, как в URL /audio/listen/…) с копированием в
-/// буфер — для геометри дэш и прочих сервисов, которым нужен голый ID.
 class _TrackIdRow extends StatelessWidget {
   final String trackId;
   const _TrackIdRow({required this.trackId});
@@ -838,7 +1170,7 @@ class _TrackIdRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 58,
             child: Text('ID',
                 style: TextStyle(
@@ -850,7 +1182,7 @@ class _TrackIdRow extends StatelessWidget {
                 Flexible(
                   child: Text(
                     trackId,
-                    style: const TextStyle(fontSize: 12, color: ngWhite),
+                    style: TextStyle(fontSize: 12, color: ngWhite),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -863,7 +1195,7 @@ class _TrackIdRow extends StatelessWidget {
                         ClipboardData(text: trackId));
                     _showNgSnack(context, 'Track ID copied');
                   },
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.all(2),
                     child: Icon(Icons.copy, size: 13, color: ngGold),
                   ),
@@ -877,7 +1209,6 @@ class _TrackIdRow extends StatelessWidget {
   }
 }
 
-/// Строка правой колонки `Credits & Info`: подпись курсивом, значение белым.
 class _CreditRow extends StatelessWidget {
   final String label;
   final String value;
@@ -893,13 +1224,13 @@ class _CreditRow extends StatelessWidget {
           SizedBox(
             width: 58,
             child: Text(label,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11, color: ngDim, fontStyle: FontStyle.italic)),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 12, color: ngWhite),
+              style: TextStyle(fontSize: 12, color: ngWhite),
               maxLines: 2,
             ),
           ),
@@ -909,10 +1240,7 @@ class _CreditRow extends StatelessWidget {
   }
 }
 
-// ── Отзывы и оценка ─────────────────────────────────────────────────────
 
-/// Под отзывов: своя оценка (votebar), список отзывов с пагинацией
-/// и форма написания отзыва — как на странице сабмишена 2015.
 class _ReviewsPod extends StatefulWidget {
   final Track track;
   const _ReviewsPod({required this.track});
@@ -927,18 +1255,13 @@ class _ReviewsPodState extends State<_ReviewsPod> {
 
   ReviewsPage? _page;
   String _sort = 'date';
-  // Направление: false — убывание (новые сверху / высокие сверху),
-  // true — возрастание. Дефолт: свежие отзывы сверху.
   bool _asc = false;
   int _pageNum = 1;
   bool _loading = false;
   String? _error;
 
-  /// Мой отзыв (синхронизирован с NG в `_load`); null — ещё не писал.
   NgReview? _myReview;
-  /// Сохранённый голос в шкале NG 0..10 (null — не голосовал).
   int? _myVote;
-  /// Форма открыта (написание или правка карандашом).
   bool _editing = false;
 
   @override
@@ -952,28 +1275,25 @@ class _ReviewsPodState extends State<_ReviewsPod> {
       _loading = true;
       _error = null;
     });
-    // NG сортирует только по убыванию. Для возрастания зеркалим страницы:
-    // логическая страница 1 (старейшие) = последняя страница NG, развёрнутая.
     final known = _page?.pages ?? 1;
     final fetchPage = _asc ? (known - _pageNum + 1).clamp(1, known) : _pageNum;
-    // Свой отзыв и голос тянем параллельно со списком чужих.
+    final trackId = widget.track.id;
     final results = await Future.wait([
-      _repo.getReviews(widget.track.id, sort: _sort, page: fetchPage),
-      _repo.getMyReview(widget.track.id),
-      NgAuth.getMyVote(widget.track.id),
+      _repo.getReviews(trackId, sort: _sort, page: fetchPage),
+      _repo.getMyReview(trackId),
     ]);
+    if (!mounted) return;
+    final vote = await NgAuth.getMyVote(trackId);
     if (!mounted) return;
     setState(() {
       _loading = false;
       _page = results[0] as ReviewsPage?;
       _error = _page == null ? 'Could not load reviews' : null;
       _myReview = results[1] as NgReview?;
-      _myVote = results[2] as int?;
+      _myVote = vote;
     });
   }
 
-  /// Отправка ответа автора; при успехе дожидаемся перезагрузки отзывов,
-  /// чтобы после закрытия диалога ответ уже стоял в карточке.
   Future<String?> _respond(String reviewId, String text) async {
     final err = await _repo.postResponse(reviewId, text);
     if (err == null) await _load();
@@ -985,8 +1305,6 @@ class _ReviewsPodState extends State<_ReviewsPod> {
     _load();
   }
 
-  /// Тап по пункту сортировки: неактивный — включить ключ (убывание,
-  // дефолт NG); активный — развернуть направление на месте.
   void _toggleSort(String key) {
     if (_sort == key) {
       _pageNum = 1;
@@ -1003,8 +1321,6 @@ class _ReviewsPodState extends State<_ReviewsPod> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<NgViewModel>();
-    // Reply доступен только автору трека (проверка дублем на сервере NG:
-    // форму /reviews/responses/create/{id} видно только владельцу).
     final canRespond = vm.currentUser != null &&
         vm.currentUser!.username.toLowerCase() ==
             widget.track.artist.toLowerCase();
@@ -1016,7 +1332,6 @@ class _ReviewsPodState extends State<_ReviewsPod> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Блок «Your Review»: голос + свой отзыв + карандаш ────────
           if (vm.currentUser != null) ...[
             _VoteBar(
               trackId: widget.track.id,
@@ -1046,9 +1361,8 @@ class _ReviewsPodState extends State<_ReviewsPod> {
             const SizedBox(height: 12),
           ],
 
-          // ── Чужие отзывы ────────────────────────────────────────────
           if (_loading)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Center(
                   child: Text('Loading…', style: ngLabel)),
@@ -1060,26 +1374,21 @@ class _ReviewsPodState extends State<_ReviewsPod> {
               NgButton(label: 'Retry', onPressed: _load),
             ])
           else if (_page == null || _page!.items.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text('No reviews yet. Be the first!', style: ngLabel),
             )
           else ...[
-            // `div.pagenav` 2024: сортировка слева, страницы справа.
             Builder(builder: (context) {
-              // NG всегда отдаёт убывание (новые/высокие сверху) —
-              // разворачиваем список при выборе возрастания.
               final items =
                   _asc ? _page!.items.reversed.toList() : _page!.items;
               return Column(children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // div.sort: ссылки без плашек; активная — жирная со стрелкой
-                    // направления (▼ убывание / ▲ возрастание).
-                    const Text('Sort By: ', style: ngLabel),
+                    Text('Sort By: ', style: ngLabel),
                     for (var i = 0; i < _sorts.length; i++) ...[
-                      if (i > 0) const Text(' | ', style: ngLabel),
+                      if (i > 0) Text(' | ', style: ngLabel),
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _toggleSort(_sorts[i].$1),
@@ -1107,19 +1416,22 @@ class _ReviewsPodState extends State<_ReviewsPod> {
                         ),
                       ),
                     ],
-                    const Spacer(),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: _ReviewPager(
-                            page: _page!.page, pages: _page!.pages, onGo: _go),
+                    if (_page!.pages > 1) ...[
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: _ReviewPager(
+                              page: _page!.page,
+                              pages: _page!.pages,
+                              onGo: _go),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
                 const NgHr(margin: EdgeInsets.symmetric(vertical: 6)),
-                // Карточки разделены тонкой чертой, без рамок.
                 for (var i = 0; i < items.length; i++) ...[
                   _ReviewCard(
                     review: items[i],
@@ -1139,17 +1451,9 @@ class _ReviewsPodState extends State<_ReviewsPod> {
   }
 }
 
-/// Votebar NG 2024 (мобильный эталон `Back To Life.mht`):
-/// слева blam-звезда (Vote 0), затем бар из 5 звёзд (спрайт star-select-2,
-/// тайл = весь файл, сжатый до 46.15×204.92; кадры по 41: hover/idle/checked/
-/// idle/blam), каждая звезда — ДВЕ тап-зоны по ползвезды (голос 1..10),
-/// справа — реакция Стива (SteveReact4, 11 кадров по 40, кадр = голос).
-///
-/// NG после голоса убирает votebar со страницы — сохранённый голос приходит
-/// извне ([savedVote], звёзды 0..5) и подсвечивается золотым.
 class _VoteBar extends StatefulWidget {
   final String trackId;
-  final int? savedVote; // 0..5, null — ещё не голосовал
+  final int? savedVote;
   final ValueChanged<int> onVoted;
 
   const _VoteBar({
@@ -1165,22 +1469,18 @@ class _VoteBar extends StatefulWidget {
 class _VoteBarState extends State<_VoteBar> {
   static final _repo = NgRepository();
 
-  /// Голос в шкале NG 0..10; null — ещё не голосовал (серые звёзды).
   int? _voted;
   bool _busy = false;
   String? _note;
 
-  /// Превью-оценка во время зажатия/драга (0..10) — видна в шапке.
   int? _preview;
 
-  /// «4.5» из голоса NG 0..10 — как сайт пишет в «You voted N!».
   static String _stars(int v) =>
       (v / 2).toStringAsFixed(v.isOdd ? 1 : 0);
 
   @override
   void initState() {
     super.initState();
-    // savedVote — уже в шкале NG 0..10 (полузвёзды).
     _voted = widget.savedVote;
   }
 
@@ -1201,10 +1501,8 @@ class _VoteBarState extends State<_VoteBar> {
     setState(() {
       _busy = true;
       _note = null;
-      // Сразу показываем, чем голосуем — до ответа NG.
       _preview = value;
     });
-    // voteTrack ждёт голос в шкале NG 0..10 (полузвёзды).
     final res = await _repo.voteTrack(widget.trackId, value);
     if (!mounted) return;
     setState(() {
@@ -1220,8 +1518,6 @@ class _VoteBarState extends State<_VoteBar> {
                     'vote${res.pendingVotes == 1 ? '' : 's'}…'
                 : 'Waiting for more votes…')
             : 'You voted ${_stars(value)}!';
-        // Наверх — голос в шкале NG 0..10, без округлений, иначе
-        // didUpdateWidget перерисует полузвёзды как целые звёзды.
         widget.onVoted(value);
       }
     });
@@ -1253,11 +1549,11 @@ class _VoteBarState extends State<_VoteBar> {
               color: (_note != null || (_voted != null && _voted! > 0)) && !_busy
                   ? ngGold
                   : ngWhite,
-              shadows: const [Shadow(color: ngBlack, offset: Offset(0, 1))],
+              shadows: [Shadow(color: ngBlack, offset: Offset(0, 1))],
             ),
           ),
           const SizedBox(height: 2),
-          const Text(
+          Text(
             "Vote fairly! Haters and ass-kissers don't help anybody.",
             style: TextStyle(fontSize: 9, color: ngDim),
             textAlign: TextAlign.center,
@@ -1265,15 +1561,20 @@ class _VoteBarState extends State<_VoteBar> {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 6),
-          // Во время отправки бар показывает именно ту оценку, что уходит
-          // в NG (_preview зафиксирован в момент отпускания пальца), а не
-          // старую — иначе при смене 5 → 4 звёзды «не доезжают».
-          NgVoteStars(
-            voted: _busy && _preview != null ? _preview : _voted,
-            enabled: !_busy,
-            onVote: (v) => _vote(v, vm),
-            onPreview: (v) => setState(() => _preview = v),
-          ),
+          if (themeCtl.textured)
+            _VoteFaceRow(
+              selected: _voted ?? 0,
+              dimUnselected: (_voted ?? 0) > 0,
+              enabled: !_busy,
+              onSelect: (f) => _vote(f * 2, vm),
+            )
+          else
+            NgVoteStars(
+              voted: _busy && _preview != null ? _preview : _voted,
+              enabled: !_busy,
+              onVote: (v) => _vote(v, vm),
+              onPreview: (v) => setState(() => _preview = v),
+            ),
         ],
       ),
     );
@@ -1281,17 +1582,78 @@ class _VoteBarState extends State<_VoteBar> {
 }
 
 
-/// Карточка ЧУЖОГО отзыва как на NG 2015: шапка (круглый аватар, ник
-/// оранжевым, флажок-жалоба, звёзды справа), текст, низ с «React» и
-/// счётчиком реакций. Рамки нет — карточки разделены тонкой чертой.
+class _VoteFaceRow extends StatelessWidget {
+  final int selected;
+  final bool enabled;
+  final bool dimUnselected;
+  final ValueChanged<int> onSelect;
+
+  const _VoteFaceRow({
+    required this.selected,
+    required this.onSelect,
+    this.enabled = true,
+    this.dimUnselected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var f = 0; f <= 5; f++)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: enabled ? () => onSelect(f) : null,
+              child: Opacity(
+                opacity: dimUnselected && selected != f ? 0.45 : 1,
+                child:
+                    _VoteFace(face: f, active: selected == f && selected > 0),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VoteFace extends StatelessWidget {
+  final int face;
+  final bool active;
+  const _VoteFace({required this.face, required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    final align = Alignment(-1 + face * 0.4, active ? 1.0 : -0.371);
+    return SizedBox(
+      width: 50,
+      height: 55,
+      child: ClipRect(
+        child: OverflowBox(
+          minWidth: 0,
+          minHeight: 0,
+          maxWidth: 300,
+          maxHeight: 230,
+          alignment: align,
+          child: Image.asset(
+            NgTex.voteFaces,
+            width: 300,
+            height: 230,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.medium,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReviewCard extends StatelessWidget {
   final NgReview review;
 
-  /// Текущий пользователь — автор трека: только ему NG даёт отвечать
-  /// на отзывы (кнопка Reply в его же карточках).
   final bool canRespond;
 
-  /// Коллбек отправки ответа (текст, id отзыва).
   final Future<String?> Function(String reviewId, String text)? onRespond;
 
   const _ReviewCard({
@@ -1307,7 +1669,6 @@ class _ReviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Шапка: аватар + ник + флажок … звёзды ────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1321,9 +1682,6 @@ class _ReviewCard extends StatelessWidget {
                             width: 26, height: 26)),
                   ),
                 ),
-              // Левая часть шапки одним Expanded: ник + дата рядом,
-              // переполнение сжатиет ник с многоточием. Флажок и звёзды —
-              // несжимаемые, всегда прижаты к правому краю без «шатания».
               Expanded(
                 child: Row(
                   children: [
@@ -1336,7 +1694,6 @@ class _ReviewCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // Дата сразу после ника, небольшой отступ.
                     if (review.date.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Text(review.date,
@@ -1345,17 +1702,6 @@ class _ReviewCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Жёлтый флажок «Report Abuse» из карточки.
-              if (review.flagUrl.isNotEmpty)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _openFlag(context),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    child: Image.asset(NgTex.a15('flag'),
-                        width: 15, height: 15),
-                  ),
-                ),
               if (review.hasScore) NgStars(score: review.score),
             ],
           ),
@@ -1367,10 +1713,8 @@ class _ReviewCard extends StatelessWidget {
                 style: ngBody.copyWith(fontSize: 12, color: ngWhite),
               ),
             ),
-          // ── Ответ автора трека (div.authresponse) ─────────────────
           if (review.response != null)
             _AuthorResponse(response: review.response!),
-          // ── Reply: только владелец трека ─────────────────────
           if (canRespond && onRespond != null)
             _ReplyButton(
               onTap: () => _showResponseForm(context, review.id),
@@ -1380,8 +1724,6 @@ class _ReviewCard extends StatelessWidget {
     );
   }
 
-  /// Форма ответа: «Your Response:» + textarea + Submit, как на NG
-  /// (pod с формой `/reviews/responses/create/{id}`).
   void _showResponseForm(BuildContext context, String reviewId) {
     final ctrl = TextEditingController();
     var busy = false;
@@ -1412,9 +1754,8 @@ class _ReviewCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Your Response:', style: ngLabel),
+                  Text('Your Response:', style: ngLabel),
                   const SizedBox(height: 5),
-                  // Поле 2024 — тёмно-серое, как на сайте.
                   Container(
                     height: 84,
                     decoration: BoxDecoration(
@@ -1429,7 +1770,7 @@ class _ReviewCard extends StatelessWidget {
                       cursorColor: ngGold,
                       cursorWidth: 1,
                       onSubmitted: (_) => submit(),
-                      style: const TextStyle(color: ngText, fontSize: 12),
+                      style: TextStyle(color: ngText, fontSize: 12),
                       decoration: const InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
@@ -1460,8 +1801,6 @@ class _ReviewCard extends StatelessWidget {
     );
   }
 
-  /// Жалоба: NG показывает диалог подтверждения на /flag/add/… —
-  /// открываем во внешнем браузере (там нужен залогиненный веб).
   void _openFlag(BuildContext context) {
     final url = review.flagUrl.startsWith('http')
         ? review.flagUrl
@@ -1473,8 +1812,6 @@ class _ReviewCard extends StatelessWidget {
   }
 }
 
-/// Ответ автора трека (div.authresponse): аватар + «ник responds:»
-/// и текст — как на NG, под текстом отзыва.
 class _AuthorResponse extends StatelessWidget {
   final NgReviewResponse response;
   const _AuthorResponse({required this.response});
@@ -1484,7 +1821,7 @@ class _AuthorResponse extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.all(7),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0xFF14110E),
         border: Border.fromBorderSide(BorderSide(color: ngHairline)),
       ),
@@ -1538,8 +1875,6 @@ class _AuthorResponse extends StatelessWidget {
   }
 }
 
-/// Кнопка «Reply» (ngicon-25-comment): иконка-облачко + слово Reply,
-/// золотым, справа под текстом отзыва.
 class _ReplyButton extends StatelessWidget {
   final VoidCallback onTap;
   const _ReplyButton({required this.onTap});
@@ -1556,7 +1891,7 @@ class _ReplyButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.chat_bubble_outline,
+              Icon(Icons.chat_bubble_outline,
                   size: 14, color: ngGold),
               const SizedBox(width: 4),
               Text('Reply',
@@ -1570,9 +1905,6 @@ class _ReplyButton extends StatelessWidget {
   }
 }
 
-/// `div.pagenav` 2024: слева «Sort By: Date/Score» (без плашек, ссылки),
-/// справа — числовые кнопки-плашки с градиентом `#34393D→#4E575E`
-/// (те же, что у кнопок шапки); активная страница — текст без плашки.
 class _ReviewPager extends StatelessWidget {
   final int page;
   final int pages;
@@ -1582,7 +1914,6 @@ class _ReviewPager extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Номера вокруг текущей: [1 … n-1 n n+1 … last]
     final nums = <int>{
       1,
       pages,
@@ -1597,8 +1928,6 @@ class _ReviewPager extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: active ? null : () => onGo(n),
         child: Container(
-          // .pagenav a: та же плашка, что у кнопок шапки 2024; у текущей
-          // страницы фон тот же, но цифра белая.
           height: 22,
           constraints: const BoxConstraints(minWidth: 22),
           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1632,7 +1961,7 @@ class _ReviewPager extends StatelessWidget {
     }
 
     Widget gap(int a, int b) =>
-        b - a > 1 ? const Padding(
+        b - a > 1 ? Padding(
               padding: EdgeInsets.symmetric(horizontal: 3),
               child: Text('…', style: TextStyle(color: ngDim, fontSize: 13)),
             ) : const SizedBox(width: 3);
@@ -1645,8 +1974,8 @@ class _ReviewPager extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Spacer(),
           ...seq,
         ],
       ),
@@ -1654,10 +1983,6 @@ class _ReviewPager extends StatelessWidget {
   }
 }
 
-/// Форма написания/правки отзыва: textarea 2015 + Submit. Оценка ставится
-/// отдельно — лицами в рамке «RATE THIS SUBMISSION!» выше.
-/// [existing] — режим правки карандашом: предзаполняет текст,
-/// шлёт POST на /reviews/edit/{id}; [onCancel] показывает кнопку отмены.
 class _WriteReview extends StatefulWidget {
   final NgViewModel vm;
   final Track track;
@@ -1665,8 +1990,6 @@ class _WriteReview extends StatefulWidget {
   final VoidCallback? onCancel;
   final ValueChanged<NgReview> onSaved;
 
-  /// Оценка, связанная с отзывом: берётся из рамки «RATE THIS SUBMISSION!»
-  /// (там теперь единственное место выбора оценки). 0 — ещё не выбрана.
   final int stars;
 
   const _WriteReview({
@@ -1725,8 +2048,6 @@ class _WriteReviewState extends State<_WriteReview> {
     setState(() => _busy = false);
     if (err == null) {
       _showNgSnack(context, _isEdit ? 'Review updated!' : 'Review posted!');
-      // ID у нового отзыва появится при следующей синхронизации с NG —
-      // сохраняем то, что знаем; под перерисуется.
       widget.onSaved(NgReview(
         id: _isEdit ? widget.existing!.id : '',
         author: 'You',
@@ -1752,32 +2073,61 @@ class _WriteReviewState extends State<_WriteReview> {
           _isEdit ? 'Edit your review:' : 'Write a review:',
           style: ngLabel.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 5),
-        // Многострочное поле 2024 — тёмно-серое (rgb(40,43,48)), как
-        // поля поиска/ввода на сайте, вместо золотой текстуры 2015.
-        Container(
-          height: 72,
-          decoration: BoxDecoration(
-            color: const Color(0xFF282B30),
-            border: Border.all(color: ngHairline),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: TextField(
-            controller: _ctrl,
-            maxLines: null,
-            cursorColor: ngGold,
-            cursorWidth: 1,
-            style: const TextStyle(color: ngText, fontSize: 12),
-            decoration: const InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              hintText: 'Share your feedback on this audio here!',
-              hintStyle: TextStyle(color: ngDim, fontSize: 12),
-              contentPadding: EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+        const SizedBox(height: 8),
+        if (themeCtl.textured) ...[
+          Container(
+            height: 72,
+            decoration: BoxDecoration(
+              color: Color(0xFFE0C070),
+              border: Border.fromBorderSide(BorderSide(color: ngBlack)),
+              image: DecorationImage(
+                image: AssetImage(NgTex.input),
+                repeat: ImageRepeat.repeatX,
+                fit: BoxFit.fitHeight,
+                alignment: Alignment.centerLeft,
+              ),
+            ),
+            child: TextField(
+              controller: _ctrl,
+              maxLines: null,
+              cursorColor: ngInk,
+              cursorWidth: 1,
+              style: const TextStyle(color: Color(0xFF1B1006), fontSize: 12),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Share your feedback on this audio here!',
+                hintStyle: TextStyle(color: Color(0xFF7A5A20), fontSize: 12),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
+        ] else ...[
+          Container(
+            height: 72,
+            decoration: BoxDecoration(
+              color: const Color(0xFF282B30),
+              border: Border.all(color: ngHairline),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: TextField(
+              controller: _ctrl,
+              maxLines: null,
+              cursorColor: ngGold,
+              cursorWidth: 1,
+              style: TextStyle(color: ngText, fontSize: 12),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Share your feedback on this audio here!',
+                hintStyle: TextStyle(color: ngDim, fontSize: 12),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+              ),
+            ),
+          ),
+        ],
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -1796,8 +2146,6 @@ class _WriteReviewState extends State<_WriteReview> {
   }
 }
 
-/// Блок «Your Review»: моя карточка с пометкой (You), оценкой-рожами
-/// и карандашом для правки. Стоит в поде Reviews выше чужих отзывов.
 class _MyReviewBlock extends StatelessWidget {
   final NgReview review;
   final VoidCallback onEdit;
@@ -1813,7 +2161,6 @@ class _MyReviewBlock extends StatelessWidget {
           children: [
             Text('Your Review', style: ngLabel.copyWith(color: ngGold)),
             const Spacer(),
-            // Карандаш из спрайта a15 — правка текста и оценки.
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onEdit,
@@ -1845,6 +2192,13 @@ class _MyReviewBlock extends StatelessWidget {
                           color: ngGold),
                     ),
                   ),
+                  if (themeCtl.textured && review.hasScore)
+                    _VoteFaceRow(
+                      selected: review.score.round().clamp(0, 5),
+                      dimUnselected: true,
+                      enabled: false,
+                      onSelect: (_) {},
+                    ),
                 ],
               ),
               if (review.date.isNotEmpty)

@@ -1,5 +1,3 @@
-// Разведка: как NG отдаёт и принимает отзывы к аудио.
-// Запуск: dart run tools/review_probe.dart
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -47,7 +45,6 @@ Future<void> main(List<String> args) async {
   dumpMatches('votebar/uek', b,
       RegExp(r"PHP\.set\('uek'[^)]*\)|/content/vote/\d+/\d+"));
 
-  // Страница отзывов (portalId=3 — аудио).
   final rev = await http.get(
       Uri.parse('https://www.newgrounds.com/reviews/portal/$id/3/date/1'),
       headers: headers(cookie));
@@ -56,7 +53,6 @@ Future<void> main(List<String> args) async {
       RegExp(r'<div\s+class="pod-body review"[\s\S]{0,120}?data-review-id="\d+">'),
       max: 3);
 
-  // Поля формы создания отзыва: <form action="/reviews/create/{id}/3">…
   final formM = RegExp(
           r'<form[^>]*action="/reviews/create/[^"]*"[\s\S]*?</form>')
       .firstMatch(b);

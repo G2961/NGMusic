@@ -46,3 +46,8 @@ app.*.map.json
 
 # Gradle build artifacts
 android/build/
+
+# Release signing (never commit)
+android/key.properties
+android/app/*.keystore
+android/app/*.jks

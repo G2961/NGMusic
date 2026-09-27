@@ -1,6 +1,3 @@
-// Разведка v5: точная структура МОЕЙ карточки отзыва на странице трека
-// (кнопки edit/delete, форма), плюс блок «your vote» на странице трека.
-// Запуск: dart run tools/review_probe5.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -26,7 +23,6 @@ Future<void> main(List<String> args) async {
           headers: headers(cookie)))
       .body;
 
-  // Полный блок своей карточки: от review_19684145 до закрывающей review-foot.
   final start = b.indexOf('data-review-id="19684145"');
   if (start < 0) {
     print('свой отзыв не найден на странице трека');

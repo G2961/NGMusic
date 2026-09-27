@@ -9,21 +9,13 @@ import 'ng_chrome.dart';
 import 'ng_playlist_dialogs.dart';
 import 'ng_retro.dart';
 
-/// Аудио-портал 2015 носил зелёный скин (`body.green`).
 const _skin = NgSkin.gold;
 
-/// Всплывашка «добавить в плейлист» в вёрстке 2015.
-///
-/// Две вкладки-плашки (`.navbar`) — плейлисты приложения и зеркала аккаунта
-/// NG, поиск по названию (листать 80+ плейлистов пальцем невозможно) и
-/// кнопка «+ Playlist »» в шапке пода, которая переиспользует общий диалог
-/// создания с выбором места.
 Future<void> showAddToPlaylistSheet(BuildContext context, Track track) {
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: ngBlack.withValues(alpha: 0.72),
-    // Без скруглений и без «ручки» — в 2015 таких элементов не было.
     shape: const RoundedRectangleBorder(),
     isScrollControlled: true,
     builder: (_) => ChangeNotifierProvider.value(
@@ -46,7 +38,6 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
   int _tab = 0;
   String _query = '';
 
-  /// id плейлиста, в который сейчас идёт запись (блокирует повторные тапы).
   int? _busyId;
 
   @override
@@ -65,7 +56,6 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SizedBox(
-        // Половина экрана: список должен листаться, но трек под шторкой видно.
         height: MediaQuery.of(context).size.height * 0.62,
         child: Column(
           children: [
@@ -183,8 +173,6 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
     _snack(context, error ?? 'Could not add the track', ok: false);
   }
 
-  /// Создание нового плейлиста прямо с треком: NG всё равно требует запись
-  /// при создании, так что «создать и добавить» — один запрос.
   Future<void> _create(LibraryViewModel lvm) async {
     final result = await showNgCreatePlaylistDialog(
       context,
@@ -214,7 +202,7 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
 
   void _snack(BuildContext context, String text, {bool ok = true}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+      content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ok ? ngOrange : ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),
@@ -223,7 +211,6 @@ class _AddToPlaylistSheetState extends State<_AddToPlaylistSheet> {
   }
 }
 
-/// Строка выбора плейлиста: иконка папки (локальный) или Пико (зеркало NG).
 class _PlaylistPickRow extends StatelessWidget {
   final int index;
   final Playlist playlist;

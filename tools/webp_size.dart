@@ -1,4 +1,3 @@
-// Одноразовый: размер webp-спрайтов 2024 (VP8X canvas).
 import 'dart:io';
 import 'dart:typed_data';
 

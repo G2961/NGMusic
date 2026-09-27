@@ -46,7 +46,6 @@ class NgViewModel extends ChangeNotifier {
     _tryLoadUser();
   }
 
-  // ─── Per-tab state ──────────────────────────────────────────────────────────
 
   final _tabs = {
     NgTab.featured: TabState(),
@@ -57,7 +56,6 @@ class NgViewModel extends ChangeNotifier {
 
   TabState stateOf(NgTab tab) => _tabs[tab]!;
 
-  // ─── Player state ───────────────────────────────────────────────────────────
 
   Track? currentTrack;
   bool isLoadingTrack = false;
@@ -69,12 +67,10 @@ class NgViewModel extends ChangeNotifier {
   Duration?         get duration        => audioHandler.duration;
   NgProcessingState get processingState => audioHandler.processingState;
 
-  // ─── User state ─────────────────────────────────────────────────────────────
 
   NgUser? currentUser;
   bool isLoadingUser = false;
 
-  // ─── Search ─────────────────────────────────────────────────────────────────
 
   List<Track> searchResults = [];
   bool isSearching = false;
@@ -83,7 +79,6 @@ class NgViewModel extends ChangeNotifier {
   bool _searchHasMore = false;
   int _searchOffset = 0;
 
-  // ─── Tab loading ─────────────────────────────────────────────────────────────
 
   void setActiveTab(NgTab tab) {
     _activeTab = tab;
@@ -101,7 +96,6 @@ class NgViewModel extends ChangeNotifier {
     notifyListeners();
 
     _fetchForTab(tab, 0, genre: genre?.id).then((tracks) {
-      // Дедуп и на первой странице: NG иногда дублирует внутри ответа.
       final seen = <String>{};
       s.tracks = tracks.where((t) => seen.add(t.id)).toList();
       s.isLoading = false;
@@ -123,8 +117,6 @@ class NgViewModel extends ChangeNotifier {
     final s = _tabs[tab]!;
     if (s.isLoadingMore || !s.hasMore) return;
 
-    // Шаг 30: NG отдаёт страницы по 30 треков, другой шаг тянет
-    // пересечения с уже загруженными (24 давал 6 дублей на догрузку).
     s.offset += 30;
     s.isLoadingMore = true;
     notifyListeners();
@@ -136,8 +128,6 @@ class NgViewModel extends ChangeNotifier {
       } else {
         final ids = s.tracks.map((t) => t.id).toSet();
         final fresh = more.where((t) => !ids.contains(t.id)).toList();
-        // Если после дедупа ничего нового (featured пересекается на 1 шт) —
-        // список кончился.
         if (fresh.isEmpty) {
           s.hasMore = false;
         } else {
@@ -161,13 +151,9 @@ class NgViewModel extends ChangeNotifier {
     };
   }
 
-  // ─── Фильтр жанра поверх активной вкладки ─────────────────────
 
-  /// Выбранный жанр сайдбара (null — обычные табы).
   NgGenre? genre;
 
-  /// Включить/выключить жанровый фильтр — все вкладки сбрасываются и
-  /// активная перезагружается с новым параметром.
   void setGenre(NgGenre? g) {
     if (genre?.id == g?.id) return;
     genre = g;
@@ -181,7 +167,6 @@ class NgViewModel extends ChangeNotifier {
     loadTab(_activeTab);
   }
 
-  // ─── Search ─────────────────────────────────────────────────────────────────
 
   Future<void> search(String query) async {
     final q = query.trim();
@@ -195,8 +180,17 @@ class NgViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      searchResults = await _repo.searchTracks(q, offset: 0);
-      _searchHasMore = searchResults.length >= 24;
+      if (RegExp(r'^\d{4,8}$').hasMatch(q)) {
+        final byId = await _repo.getTrackById(q);
+        searchResults = byId != null ? [byId] : [];
+        _searchHasMore = false;
+        if (byId == null) {
+          searchError = 'No track #$q on Newgrounds.';
+        }
+      } else {
+        searchResults = await _repo.searchTracks(q, offset: 0);
+        _searchHasMore = searchResults.length >= 24;
+      }
     } catch (e) {
       searchError = 'Ошибка поиска: $e';
     } finally {
@@ -234,7 +228,6 @@ class NgViewModel extends ChangeNotifier {
 
   bool get isInSearch => _lastQuery.isNotEmpty;
 
-  // ─── User / Auth ─────────────────────────────────────────────────────────────
 
   Future<void> _tryLoadUser() async {
     if (!await NgAuth.isLoggedIn()) return;
@@ -263,16 +256,12 @@ class NgViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Подписка на автора. Возвращает подтверждённое состояние или null,
-  /// если NG отказал (тогда UI не должен менять кнопку).
   Future<bool?> setFollow(String artist, bool follow) =>
       _repo.setFollow(artist, follow);
 
-  /// Текущий статус подписки (null — определить не удалось).
   Future<bool?> getFollowStatus(String artist) =>
       _repo.getFollowStatus(artist);
 
-  // ─── Playback ────────────────────────────────────────────────────────────────
 
   List<Track>? _contextTracks;
 
@@ -280,12 +269,10 @@ class NgViewModel extends ChangeNotifier {
     _contextTracks = tracks;
   }
 
-  // ─── Shuffle & Repeat ────────────────────────────────────────────────────────
 
   bool _shuffle = false;
   bool get shuffle => _shuffle;
 
-  // 0 = off, 1 = repeat all, 2 = repeat one
   int _repeat = 0;
   int get repeat => _repeat;
 
@@ -308,6 +295,12 @@ class NgViewModel extends ChangeNotifier {
   int _playGen = 0;
 
   Future<void> playTrack(Track track) async {
+    if (currentTrack?.id == track.id &&
+        !isLoadingTrack &&
+        audioHandler.isPlaying) {
+      notifyListeners();
+      return;
+    }
     final gen = ++_playGen;
     currentTrack = track;
     isLoadingTrack = true;
@@ -365,7 +358,6 @@ class NgViewModel extends ChangeNotifier {
   void _onTrackCompleted() {
     if (currentTrack == null || _lastCompletedId == currentTrack!.id) return;
     _lastCompletedId = currentTrack!.id;
-    // repeat one — restart current
     if (_repeat == 2) { playTrack(currentTrack!); return; }
     if (_shuffle) { _playRandom(); return; }
     final list = _allTracks;
@@ -373,7 +365,6 @@ class NgViewModel extends ChangeNotifier {
     if (idx != -1 && idx + 1 < list.length) {
       playTrack(list[idx + 1]);
     } else if (_repeat == 1 && list.isNotEmpty) {
-      // repeat all — wrap to start
       playTrack(list.first);
     }
   }

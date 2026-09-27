@@ -3,7 +3,6 @@ class Playlist {
   final String name;
   final String? description;
   final int createdAt;
-  // null = local only; non-null = mirrored NG playlist id
   final String? ngId;
 
   const Playlist({
@@ -106,9 +105,6 @@ class Favorite {
   final String? genre;
   final int addedAt;
 
-  /// Сердечко ушло в избранное аккаунта Newgrounds (а не только в базу
-  /// приложения). Пишется в момент добавления — по настройке «Save favorites
-  /// to», потому что прочитать список избранного с NG нельзя.
   final bool isNg;
 
   const Favorite({
@@ -148,9 +144,6 @@ class Favorite {
       );
 }
 
-// NG cloud playlist. `url`/`entries`/`iconUrl` заполняются, когда список
-// собран со страницы `/playlists` через `/visual-links-fetch`;
-// у варианта из выпадашки `addentry` есть только id и имя.
 class NgCloudPlaylist {
   final String id;
   final String name;
@@ -167,16 +160,20 @@ class NgCloudPlaylist {
   });
 }
 
-/// Кнопка `favefollow` со страницы NG: секрет кнопки, одноразовый
-/// `userkey` и текущее состояние (`null` — определить не удалось).
 class NgFaveButton {
   final String key;
   final String userkey;
   final bool? active;
 
+  final String? followUrl;
+
+  final String? unfollowUrl;
+
   const NgFaveButton({
     required this.key,
     required this.userkey,
     this.active,
+    this.followUrl,
+    this.unfollowUrl,
   });
 }

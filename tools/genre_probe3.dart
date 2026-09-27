@@ -1,5 +1,3 @@
-// Разведка v20: где на /audio/browse живёт сайдбар жанров — ищем любые
-// конструкции с "genre" в тексте страницы. Запуск: dart run tools/genre_probe3.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -11,7 +9,6 @@ Future<void> main() async {
   final b = r.body;
   print('len=${b.length}');
 
-  // Все вхождения слова genre с контекстом.
   var count = 0;
   for (final m in RegExp(r'genre').allMatches(b)) {
     final i = m.start;

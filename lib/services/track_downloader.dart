@@ -15,7 +15,6 @@ class TrackDownloader {
   static final _repo = NgRepository();
 
   static Future<void> download(Track track, BuildContext context) async {
-    // Resolve the CDN mp3 URL on demand — no need to play the track first.
     var url = track.mp3Url;
     if (url == null || url.isEmpty) {
       try {
@@ -59,14 +58,11 @@ class TrackDownloader {
 
   static Future<String?> _resolveDir(BuildContext context) async {
     if (Platform.isAndroid) {
-      // Android 11+ needs MANAGE_EXTERNAL_STORAGE to write to public Downloads.
-      // Older versions use the legacy WRITE_EXTERNAL_STORAGE.
       final granted = await _ensureStoragePermission(context);
       if (granted) {
         final pub = Directory('/storage/emulated/0/Download/NGMusic');
         try {
           await pub.create(recursive: true);
-          // Verify we can actually write
           final probe = File('${pub.path}/.probe');
           await probe.writeAsString('ok');
           await probe.delete();
@@ -75,7 +71,6 @@ class TrackDownloader {
       }
     }
 
-    // Fallback: app-private external storage (always writable, no permission)
     try {
       final ext = await getExternalStorageDirectory();
       if (ext != null) {
@@ -96,17 +91,13 @@ class TrackDownloader {
     return null;
   }
 
-  /// Requests the right storage permission for the platform version.
   static Future<bool> _ensureStoragePermission(BuildContext context) async {
-    // Try the modern "all files access" first (Android 11+).
     var manage = await Permission.manageExternalStorage.status;
     if (manage.isGranted) return true;
 
-    // Legacy storage permission (Android 10 and below grants real access).
     final legacy = await Permission.storage.request();
     if (legacy.isGranted) return true;
 
-    // Need MANAGE_EXTERNAL_STORAGE — this opens a system settings screen.
     manage = await Permission.manageExternalStorage.request();
     if (manage.isGranted) return true;
 
@@ -114,7 +105,6 @@ class TrackDownloader {
       final open = await _askOpenSettings(context);
       if (open == true) {
         await openAppSettings();
-        // Re-check after returning from settings
         manage = await Permission.manageExternalStorage.status;
         return manage.isGranted;
       }
@@ -127,9 +117,9 @@ class TrackDownloader {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: cSurface2,
-        title: const Text('Нужно разрешение',
+        title: Text('Нужно разрешение',
             style: TextStyle(color: cTextPri, fontSize: 17)),
-        content: const Text(
+        content: Text(
           'Чтобы сохранять треки в папку Downloads, дай приложению доступ '
           '«Управление всеми файлами» в настройках.',
           style: TextStyle(color: cTextSec, fontSize: 14),
@@ -137,11 +127,11 @@ class TrackDownloader {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена', style: TextStyle(color: cTextDim)),
+            child: Text('Отмена', style: TextStyle(color: cTextDim)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Открыть настройки',
+            child: Text('Открыть настройки',
                 style: TextStyle(color: cAccent)),
           ),
         ],

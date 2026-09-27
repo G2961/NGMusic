@@ -1,5 +1,3 @@
-// Разведка v25: как РЕАЛЬНО работает фильтр жанра: смотрим inner=1
-// (как дергает приложение) и сравниваем. Запуск: dart run tools/genre_probe8.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -16,7 +14,6 @@ Future<List<String>> ids(String url) async {
 }
 
 Future<void> main() async {
-  // Как в приложении: ?genre=X&inner=1
   final g4i = await ids('https://www.newgrounds.com/audio/browse?genre=4&inner=1');
   final g15i = await ids('https://www.newgrounds.com/audio/browse?genre=15&inner=1');
   print('g4 ids: ${g4i.take(5)}');

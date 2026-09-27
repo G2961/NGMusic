@@ -22,9 +22,6 @@ class LocalDb {
       path,
       version: 3,
       onUpgrade: (db, from, to) async {
-        // v2: уникальность зеркал NG. До неё две параллельные синхронизации
-        // (из LibraryViewModel._init и из _RootShell.build) вставляли один и
-        // тот же плейлист дважды — в библиотеке было 162 записи вместо 81.
         if (from < 2) {
           await db.execute('''
             DELETE FROM playlists
@@ -32,16 +29,12 @@ class LocalDb {
               SELECT MIN(id) FROM playlists WHERE ng_id IS NOT NULL GROUP BY ng_id
             )
           ''');
-          // FK-каскад в sqflite по умолчанию выключен — чистим осиротевшие треки.
           await db.execute('''
             DELETE FROM playlist_tracks
             WHERE playlist_id NOT IN (SELECT id FROM playlists)
           ''');
           await db.execute(_ngIdIndex);
         }
-        // v3: откуда сердечко — из приложения или с аккаунта NG. Вкладка
-        // Favorites делит список на две секции, а прочитать избранное с NG
-        // нельзя, поэтому источник фиксируем в момент добавления.
         if (from < 3) {
           await db.execute(
               'ALTER TABLE favorites ADD COLUMN is_ng INTEGER NOT NULL DEFAULT 0');
@@ -92,13 +85,10 @@ class LocalDb {
     );
   }
 
-  /// Один локальный плейлист на один плейлист NG. NULL (чисто локальные)
-  /// SQLite в UNIQUE-индексе дубликатами не считает, так что их сколько угодно.
   static const _ngIdIndex =
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_ng_id '
       'ON playlists(ng_id)';
 
-  // ─── Playlists ────────────────────────────────────────────────────────────────
 
   Future<List<Playlist>> getPlaylists() async {
     final d = await db;
@@ -114,9 +104,6 @@ class LocalDb {
     return p.copyWith(id: id);
   }
 
-  /// Создаёт зеркало плейлиста NG. Если зеркало уже есть — возвращает его,
-  /// а не вторую копию: UNIQUE-индекс по `ng_id` вставить дубликат не даст,
-  /// но `insert` с `ignore` вернул бы id = 0.
   Future<Playlist> createPlaylistWithNgId(String name, {required String ngId}) async {
     final d = await db;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -140,7 +127,6 @@ class LocalDb {
     await d.delete('playlists', where: 'id = ?', whereArgs: [id]);
   }
 
-  // ─── Playlist tracks ──────────────────────────────────────────────────────────
 
   Future<List<PlaylistTrack>> getPlaylistTracks(int playlistId) async {
     final d = await db;
@@ -200,7 +186,6 @@ class LocalDb {
     );
   }
 
-  // ─── Favorites ────────────────────────────────────────────────────────────────
 
   Future<List<Favorite>> getFavorites() async {
     final d = await db;
@@ -240,15 +225,12 @@ class LocalDb {
     await d.delete('favorites', where: 'track_id = ?', whereArgs: [trackId]);
   }
 
-  /// Помечает, лежит ли сердечко на NG. Нужно для сверки с сайтом:
-  /// записи, сделанные до появления колонки `is_ng`, источника не помнят.
   Future<void> setFavoriteIsNg(String trackId, bool isNg) async {
     final d = await db;
     await d.update('favorites', {'is_ng': isNg ? 1 : 0},
         where: 'track_id = ?', whereArgs: [trackId]);
   }
 
-  /// [isNg] — сердечко ушло и на Newgrounds; влияет только на новую запись.
   Future<void> toggleFavorite(Track track, {bool isNg = false}) async {
     if (await isFavorite(track.id)) {
       await removeFavorite(track.id);
@@ -257,7 +239,6 @@ class LocalDb {
     }
   }
 
-  // Convert PlaylistTrack / Favorite back to Track for playback
   static Track playlistTrackToTrack(PlaylistTrack pt) => Track(
         id: pt.trackId,
         title: pt.title,

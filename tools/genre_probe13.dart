@@ -1,7 +1,3 @@
-// Разведка v30: добираем оставшиеся числовые ID (22, 30-38, 60-70 не дали
-// жанра — значит надо искать в другом месте; сверяем с NG audio API поиска).
-// Попробуем values из фильтров страницы browse: <option value="N">.
-// Запуск: dart run tools/genre_probe13.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -13,7 +9,6 @@ Future<void> main() async {
       headers: {'User-Agent': ua});
   final b = r.body;
 
-  // <option value="N">Label</option> — справочник жанров фильтра.
   final opts = RegExp(r'<option value="(\d+)"[^>]*>\s*([^<]+?)\s*</option>')
       .allMatches(b)
       .map((m) => (m.group(1)!, m.group(2)!))

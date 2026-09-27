@@ -1,5 +1,3 @@
-// Разведка v7: на странице /reviews/edit/{id} ищем именно форму отзыва
-// (не топсёрч) и как в ней отмечен score. Запуск: dart run tools/review_probe7.dart [reviewId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -26,7 +24,6 @@ Future<void> main(List<String> args) async {
   final body = b.body;
   print('GET -> ${b.statusCode} len=${body.length}');
 
-  // Все формы на странице.
   final forms =
       RegExp(r'<form[^>]*action="([^"]*)"[^>]*>').allMatches(body).toList();
   print('forms:');
@@ -34,7 +31,6 @@ Future<void> main(List<String> args) async {
     print('  ${f.group(1)}');
   }
 
-  // Ищем textarea — это форма отзыва; печатаем всю область вокруг.
   final ta = body.indexOf('<textarea');
   if (ta < 0) {
     print('textarea нет');

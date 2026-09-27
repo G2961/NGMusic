@@ -1,5 +1,3 @@
-// Разведка v4: где именно на странице трека лежит МОЙ отзыв и как
-// NG помечает «you already voted / your vote». Запуск: dart run tools/review_probe4.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -25,7 +23,6 @@ Future<void> main(List<String> args) async {
           headers: headers(cookie)))
       .body;
 
-  // Все вхождения g2961 с контекстом.
   print('=== g2961 contexts ===');
   for (final m in RegExp(r'g2961').allMatches(b).take(10)) {
     final i = m.start;
@@ -33,7 +30,6 @@ Future<void> main(List<String> args) async {
         '[${i.toString().padLeft(6)}] ...${b.substring((i - 200).clamp(0, i), (i + 200).clamp(0, b.length)).replaceAll('\n', ' ')}...\n');
   }
 
-  // votebar: отмечен ли выбор (класс voted / checked).
   print('=== votebar state ===');
   final votebarM = RegExp(r'<form[^>]*id="votebar"[\s\S]{0,3000}?</form>')
       .firstMatch(b);

@@ -1,5 +1,3 @@
-// Разведка v24: genre= работает вообще? Сравниваем БЕЗ параметров,
-// с genre=4 и путь-стиль. Запуск: dart run tools/genre_probe7.dart
 import 'package:http/http.dart' as http;
 
 const ua =

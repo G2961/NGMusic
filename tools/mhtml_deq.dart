@@ -1,4 +1,3 @@
-// Одноразовый: quoted-printable -> читаемый HTML (просто убираем =3D/=XX).
 import 'dart:io';
 
 void main() {

@@ -1,6 +1,3 @@
-// Разведка v17: какой URL дергает initTotals для числа реакций.
-// Пробуем форматы favorites/reactions c типом 2003 как JSON.
-// Запуск: dart run tools/review_probe17.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;

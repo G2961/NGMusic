@@ -10,21 +10,16 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # HTTP + HTML parsing
   http: ^1.2.2
   html: ^0.15.4
 
-  # Image
   cached_network_image: ^3.4.1
 
-  # State management
   provider: ^6.1.2
 
-  # Local DB
   sqflite: ^2.3.3+1
   path: ^1.9.0
 
-  # Utils
   path_provider: ^2.1.4
   permission_handler: ^11.3.1
   url_launcher: ^6.3.1
@@ -35,6 +30,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -43,7 +39,6 @@ flutter:
     - family: DSEG7
       fonts:
         - asset: assets/fonts/DSEG7Classic-Regular.ttf
-    # "headerfont" из ng_publish.css 2015 года
     - family: Pakenham
       fonts:
         - asset: assets/ng2015/fonts/pakenham.ttf
@@ -58,3 +53,12 @@ flutter:
     - assets/ng2015/a15/
     - assets/ng2015/vp/
     - assets/ng2024/sprites/
+    - assets/ngmusic_theme-previews/
+
+flutter_launcher_icons:
+  image_path: "assets/icon.png"
+  adaptive_icon_background: "assets/launcher/background.png"
+  adaptive_icon_foreground: "assets/launcher/foreground.png"
+  adaptive_icon_monochrome: "assets/launcher/mono.png"
+  adaptive_icon_foreground_inset: 0
+  android: "ic_launcher"

@@ -8,19 +8,13 @@ import '../theme/ng_theme.dart';
 import '../widgets/ng_retro.dart';
 import 'artist_track_row.dart';
 
-/// Аудио-портал 2015 носил зелёный скин (`body.green`).
 const _skin = NgSkin.gold;
 
-/// Полный список аудио автора: то же, что `<username>.newgrounds.com/audio`
-/// с догрузкой по скроллу. На самой странице автора список обрезан до восьми
-/// строк (как в 2015), а сюда ведёт плашка «View All »».
 class ArtistAudioScreen extends StatefulWidget {
   final String artist;
 
-  /// Уже загруженная первая страница — чтобы не ждать повторный запрос.
   final List<Track> initialTracks;
 
-  /// С какой страницы продолжать догрузку (первая уже в [initialTracks]).
   final int nextPage;
 
   const ArtistAudioScreen({
@@ -90,8 +84,6 @@ class _ArtistAudioScreenState extends State<ArtistAudioScreen> {
     }
   }
 
-  /// Страница NG отдаёт ~30 записей за запрос — отдельная «порция» не нужна,
-  /// достаточно идти по страницам, пока приходят новые id.
   Future<void> _loadMore() async {
     if (_loadingMore || _loading || !_hasMore) return;
     setState(() => _loadingMore = true);
@@ -160,7 +152,7 @@ class _ArtistAudioScreenState extends State<ArtistAudioScreen> {
           children: [
             Container(
               height: 56,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: ngBlack,
                 border: Border(bottom: BorderSide(color: ngHairline)),
               ),

@@ -3,12 +3,10 @@ import 'package:flutter/services.dart';
 
 enum NgProcessingState { idle, loading, buffering, ready, completed }
 
-/// Bridges Flutter ↔ native Media3 PlaybackService via MethodChannel + EventChannel.
 class NgAudioHandler {
   static const _method = MethodChannel('ngmusic/player');
   static const _events = EventChannel('ngmusic/player/events');
 
-  // Cached state — updated from the native event stream
   bool _isPlaying = false;
   Duration _position = Duration.zero;
   Duration? _duration;
@@ -19,10 +17,8 @@ class NgAudioHandler {
   Duration? get duration => _duration;
   NgProcessingState get processingState => _processingState;
 
-  // Self-reference so ViewModel can use audioHandler.player.x unchanged
   NgAudioHandler get player => this;
 
-  // Wired by ViewModel → fires when notification next/prev is tapped
   Future<void> Function()? onSkipToNext;
   Future<void> Function()? onSkipToPrevious;
 
@@ -30,6 +26,9 @@ class NgAudioHandler {
   final _positionCtrl    = StreamController<Duration>.broadcast();
   final _durationCtrl    = StreamController<Duration?>.broadcast();
   final _processingCtrl  = StreamController<NgProcessingState>.broadcast();
+
+  int _epoch = 0;
+  int _durationEpoch = 0;
 
   Stream<bool>               get playingStream      => _playingCtrl.stream;
   Stream<Duration>           get positionStream     => _positionCtrl.stream;
@@ -51,10 +50,18 @@ class NgAudioHandler {
         _isPlaying = value as bool;
         _playingCtrl.add(_isPlaying);
       case 'position':
-        _position = Duration(milliseconds: (value as num).toInt());
+        final pos = Duration(milliseconds: (value as num).toInt());
+        if (pos < Duration.zero) return;
+        if (_duration != null && _duration! > Duration.zero && pos > _duration!) {
+          return;
+        }
+        _position = pos;
         _positionCtrl.add(_position);
       case 'duration':
-        _duration = Duration(milliseconds: (value as num).toInt());
+        final durMs = (value as num).toInt();
+        if (durMs <= 0 || _durationEpoch == _epoch) return;
+        _durationEpoch = _epoch;
+        _duration = Duration(milliseconds: durMs);
         _durationCtrl.add(_duration);
       case 'state':
         _processingState = _parseState(value as String);
@@ -78,10 +85,14 @@ class NgAudioHandler {
     String artist = '',
     Uri? artworkUri,
   }) async {
+    _epoch++;
     _duration = null;
     _position = Duration.zero;
+    _durationEpoch = 0;
     _processingState = NgProcessingState.loading;
     _processingCtrl.add(_processingState);
+    _positionCtrl.add(_position);
+    _durationCtrl.add(null);
     await _method.invokeMethod<void>('play', {
       'url': url,
       'title': title,

@@ -1,7 +1,3 @@
-// Разведка v8: страница трека при уже оставленном отзыве.
-// 1) Скрывают ли create-форму? 2) Где лежит мой отзыв (сразу после create-формы)?
-// 3) Как выглядит блок «your vote» под плеером (sidestats data-my-vote?).
-// Запуск: dart run tools/review_probe8.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -27,13 +23,10 @@ Future<void> main(List<String> args) async {
           headers: headers(cookie)))
       .body;
 
-  // 1. Create-форма присутствует?
   print('create form: ${body.contains('/reviews/create/')}');
 
-  // 2. Контекст вокруг секции отзывов: от 'Reviews' podtop до первой чужой карточки.
   final revIdx = body.indexOf('data-review-id="19684145"');
   if (revIdx > 0) {
-    // Ищем заголовок пода отзывов до неё.
     final headIdx = body.lastIndexOf('podtop', revIdx);
     print('\n=== FROM PODTOP TO MY CARD (${revIdx - headIdx} chars) ===');
     print(body
@@ -42,7 +35,6 @@ Future<void> main(List<String> args) async {
         .replaceAll(RegExp(r'\s+'), ' '));
   }
 
-  // 3. my-vote / voted признаки.
   print('\n=== vote markers ===');
   for (final pat in ['data-my-vote', 'my_vote', 'already-voted', 'voted',
       'votebar-logged', 'sidestats']) {

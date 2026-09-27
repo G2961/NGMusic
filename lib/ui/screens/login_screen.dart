@@ -5,12 +5,8 @@ import '../../data/repository/ng_auth.dart';
 import '../theme/ng_theme.dart';
 import '../widgets/ng_retro.dart';
 
-/// Аудио-портал 2015 носил зелёный скин (`body.green`).
 const _skin = NgSkin.gold;
 
-/// Вход через Newgrounds Passport: сам паспорт остаётся веб-страницей, но
-/// обрамление — шапка с логотипом и под (`#main>div`) со состояниями загрузки
-/// и ошибки в вёрстке 2015.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -45,7 +41,6 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
 
-          // Ушли с паспорта на домен NG — вероятно, вход удался
           if (_onPassportPage &&
               url.contains('newgrounds.com') &&
               !_extracting &&
@@ -73,7 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _doExtract() async {
     try {
-      // 1. Имя из тайтла страницы: "G2961's Account Page"
       final title =
           await _ctrl.runJavaScriptReturningResult('document.title') as String;
       final cleanTitle = title.replaceAll(RegExp(r'^"|"$'), '').trim();
@@ -82,7 +76,6 @@ class _LoginScreenState extends State<LoginScreen> {
               .firstMatch(cleanTitle);
       String username = titleMatch?.group(1)?.toLowerCase().trim() ?? '';
 
-      // 2. Фоллбэк: заголовок на странице аккаунта
       if (username.isEmpty) {
         final heading = await _ctrl.runJavaScriptReturningResult(r'''
           (function() {
@@ -95,7 +88,6 @@ class _LoginScreenState extends State<LoginScreen> {
         username = heading.replaceAll(RegExp(r'^"|"$'), '').trim();
       }
 
-      // 3. Фоллбэк 2: ссылка на свой профиль в шапке (`user.newgrounds.com`)
       if (username.isEmpty) {
         final slug = await _ctrl.runJavaScriptReturningResult(r'''
           (function() {
@@ -109,7 +101,6 @@ class _LoginScreenState extends State<LoginScreen> {
         username = slug.replaceAll(RegExp(r'^"|"$'), '').trim();
       }
 
-      // 4. Сессионные куки берём нативно — в document.cookie нет HttpOnly-токена
       String cookieString =
           await NgAuth.readNativeCookies('https://www.newgrounds.com');
       if (cookieString.isEmpty) {
@@ -118,7 +109,6 @@ class _LoginScreenState extends State<LoginScreen> {
         cookieString = cookieResult.replaceAll(RegExp(r'^"|"$'), '');
       }
 
-      // В лог — только имена кук, без значений.
       final names = cookieString
           .split(';')
           .map((c) => c.split('=').first.trim())
@@ -133,8 +123,6 @@ class _LoginScreenState extends State<LoginScreen> {
         _loading = false;
       });
 
-      // Признак входа — именно имя со страницы аккаунта: кука `newgrounds_session`
-      // выдаётся и гостю, по ней отличить нельзя.
       if (username.isEmpty) {
         setState(() => _error = 'Newgrounds вернул страницу «$cleanTitle» — кажется, '
             'вход не завершён. Попробуй ещё раз.');
@@ -159,7 +147,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted) Navigator.pop(context, username);
   }
 
-  /// Начать паспорт заново — после ошибки или по кнопке в шапке.
   void _restart() {
     setState(() {
       _error = null;
@@ -184,7 +171,6 @@ class _LoginScreenState extends State<LoginScreen> {
             _TopBar(
                 onBack: () => Navigator.maybePop(context), onReload: _restart),
             Expanded(
-              // Под стоит на серой колонке `#main`, как любая страница 2015.
               child: NgPageColumn(
                 padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
                 child: NgPod.fill(
@@ -192,9 +178,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   title:
                       _extracting ? 'Detecting Account' : 'Newgrounds Passport',
                   skin: _skin,
-                  // «Done»-плашка доступна всегда, пока не идёт извлечение: новый
-                  // паспорт логинится ажаксом и может не делать перехода, тогда
-                  // автодетект не сработает и завершить надо руками.
                   action: !_extracting && _error == null
                       ? NgPlateLink(label: 'Done »', onTap: _onDone)
                       : null,
@@ -212,8 +195,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Stack(
       children: [
         Positioned.fill(child: WebViewWidget(controller: _ctrl)),
-        // Полосатый индикатор ложится поверх страницы, чтобы вёрстка пода не
-        // прыгала на каждом переходе паспорта.
         if (busy)
           Positioned(
             left: 0,
@@ -226,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const NgLoading(width: 140),
                   if (_extracting)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.only(bottom: 12),
                       child: Text('Reading your account page…', style: ngLabel),
                     ),
@@ -254,7 +235,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ── Шапка ────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   final VoidCallback onBack;
@@ -265,7 +245,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),

@@ -4,22 +4,13 @@ import '../../viewmodel/library_viewmodel.dart';
 import '../theme/ng_theme.dart';
 import 'ng_retro.dart';
 
-/// Диалог «новый плейлист» в вёрстке 2015: под с полем ввода и выбором места.
-///
-/// Живёт отдельно от экранов, потому что нужен в двух местах: кнопка
-/// «+ Playlist» в библиотеке и «+ New» во всплывашке добавления трека.
 
-/// Результат диалога создания: имя и место хранения.
 class NgNewPlaylist {
   final String name;
   final PlaylistTarget target;
   const NgNewPlaylist(this.name, this.target);
 }
 
-/// Показывает диалог создания. Возвращает null, если отменили.
-///
-/// [canUseNg] == false — вариант Newgrounds виден, но заблокирован: так
-/// понятно, чего не хватает. [target] задаёт предвыбранное место.
 Future<NgNewPlaylist?> showNgCreatePlaylistDialog(
   BuildContext context, {
   required bool canUseNg,
@@ -61,7 +52,6 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   @override
   void initState() {
     super.initState();
-    // У NgTextField нет autofocus — поднимаем клавиатуру после первого кадра.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
@@ -97,7 +87,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Playlist name', style: ngLabel),
+            Text('Playlist name', style: ngLabel),
             const SizedBox(height: 5),
             NgTextField(
               controller: _ctrl,
@@ -106,7 +96,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
               onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 12),
-            const Text('Where to create', style: ngLabel),
+            Text('Where to create', style: ngLabel),
             const SizedBox(height: 5),
             NgTargetRow(
               icon: 'folder',
@@ -146,7 +136,6 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   }
 }
 
-/// Строка выбора места создания: иконка, подпись, галочка выбора.
 class NgTargetRow extends StatelessWidget {
   final String icon;
   final String label;

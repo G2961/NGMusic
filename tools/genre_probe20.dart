@@ -1,5 +1,3 @@
-// Разведка v41: работает ли ?genre= на /audio/featured и /audio/popular.
-// Запуск: dart run tools/genre_probe20.dart
 import 'package:http/http.dart' as http;
 
 const ua =

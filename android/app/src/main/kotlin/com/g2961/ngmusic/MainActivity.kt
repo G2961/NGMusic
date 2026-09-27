@@ -14,7 +14,6 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 
-        // Cookie channel — reads HttpOnly session cookies for login
         MethodChannel(messenger, "ngmusic/cookies").setMethodCallHandler { call, result ->
             when (call.method) {
                 "getCookies" -> {
@@ -30,7 +29,6 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // Playback bridge — Media3 MediaSessionService ↔ Flutter
         playbackBridge = PlaybackBridge(this, messenger)
     }
 

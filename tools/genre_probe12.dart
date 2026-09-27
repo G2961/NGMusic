@@ -1,6 +1,3 @@
-// Разведка v29: добираем недостающие ID поджанров (22, 30-38 и пр.)
-// и сверяем группы (id групп в под-меню NG другие, не жанровые).
-// Запуск: dart run tools/genre_probe12.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -17,9 +14,6 @@ Future<Set<String>> genresOf(String q) async {
 }
 
 Future<void> main() async {
-  // Ищем недостающие: Brit Pop, Heavy Metal есть (15). Где Brit Pop?
-  // Проверяем жанровые «мусорные» диапазоны как группы: 30..38 дают дефолт
-  // (это, похоже, ID из другого справочника — portal). Пробуем строковые slug.
   for (final q in ['genre=brit-pop', 'genre=bluegrass', 'genre=blues',
     'genre=goth', 'genre=ska', 'genre=world', 'genre=drama',
     'genre=voice-demo', 'genre=comedy', 'genre=creepypasta',

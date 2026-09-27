@@ -16,7 +16,6 @@ class NgRepository {
   static const _userAgent =
       'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36';
 
-  // ─── Public API ─────────────────────────────────────────────────────────────
 
   Future<List<Track>> getFeaturedTracks({int offset = 0, String? genre}) =>
       _parseTracks(offset == 0 && genre == null
@@ -41,11 +40,9 @@ class NgRepository {
           '${genre != null ? '&genre=$genre' : ''}'
           '&offset=$offset&inner=1');
 
-  /// Список треков жанра без привязки к табу (совместимость).
   Future<List<Track>> getGenreTracks(String genreId, {int offset = 0}) =>
       getBrowseTracks(offset: offset, genre: genreId);
 
-  /// Returns (tracks, nextPageUrl). nextPageUrl is null when no more pages.
   Future<(List<Track>, String?)> getArtistTracksPage(
       String artist, {int page = 1}) async {
     final url =
@@ -64,7 +61,6 @@ class NgRepository {
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
-      // Gather HTML from all year groups
       final allHtml = ((json['items'] as Map?)?.values ?? [])
           .expand((v) => v is List ? v : [v])
           .cast<String>()
@@ -73,7 +69,6 @@ class NgRepository {
       final doc = htmlParser.parse(allHtml);
       final tracks = _parseArtistItems(doc, artist);
 
-      // Next page URL from load_more field
       final loadMore = json['load_more'] as String? ?? '';
       final nextUrl = RegExp(r'"(https://[^"]+page=\d+)"')
           .firstMatch(loadMore)
@@ -85,16 +80,21 @@ class NgRepository {
     }
   }
 
-  /// Fetches MP3 url + all metadata from preload-data JSON in one request.
   Future<void> enrichTrack(Track track) async {
     try {
       final html = await _connectRaw('$_baseUrl/audio/listen/${track.id}');
+      enrichFromHtml(track, html);
+    } catch (_) {}
+  }
+
+  void enrichFromHtml(Track track, String html) {
+    try {
       final match = RegExp(
         r'<script[^>]+id="preload-data"[^>]*>(.*?)</script>',
         dotAll: true,
       ).firstMatch(html);
       if (match == null) {
-        await _enrichFallback(track, html);
+        _enrichFallback(track, html);
         return;
       }
       final data = jsonDecode(match.group(1)!) as Map<String, dynamic>;
@@ -104,8 +104,6 @@ class NgRepository {
         return;
       }
 
-      // 'filename' is just the bare filename (e.g. "815556_untitled.mp3").
-      // Build the full CDN URL using the track's audioBaseUrl.
       final rawFilename = song['filename'] as String?;
       if (rawFilename != null && rawFilename.isNotEmpty) {
         final filename = rawFilename.startsWith('http')
@@ -120,13 +118,11 @@ class NgRepository {
       if ((track.genre.isEmpty) && song['genre'] != null) {
         track.genre = song['genre'] as String;
       }
-      // Upgrade artwork to the real CDN icon if the list didn't provide one.
       final icon = song['icon'] as String?;
       if (icon != null && icon.contains('ngfiles.com') &&
           !track.iconUrl.contains('ngfiles.com')) {
         track.iconUrl = icon;
       }
-      // Статистика/теги/награды живут в разметке, а не в preload-data.
       parseListenDetails(track, html);
     } catch (_) {}
   }
@@ -145,19 +141,52 @@ class NgRepository {
     }
   }
 
-  /// Loads score/votes/listens into track fields (uses enrichTrack internally)
+  Future<Track?> getTrackById(String id) async {
+    final clean = id.trim();
+    if (int.tryParse(clean) == null) return null;
+    try {
+      final html = await _connectRaw('$_baseUrl/audio/listen/$clean');
+      final track = trackFromListenPage(clean, html);
+      if (track != null) enrichFromHtml(track, html);
+      return track;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Track? trackFromListenPage(String id, String html) {
+    if (html.contains('The page you requested could not be found')) {
+      return null;
+    }
+    final doc = htmlParser.parse(html);
+    String? meta(String prop) => doc
+        .querySelector('meta[property="$prop"]')
+        ?.attributes['content'];
+
+    final title = _decodeEntities(meta('og:title') ?? '');
+    if (title.isEmpty) return null;
+    final artist = _decodeEntities(
+        doc.querySelector('.item-details-main h4 a')?.text.trim() ?? '');
+
+    return Track(
+      id: id,
+      title: title,
+      artist: artist.isEmpty ? 'Unknown' : artist,
+      genre: '',
+      iconUrl: meta('og:image') ?? '',
+      duration: 0,
+      audioType: 3,
+      mp3Url: meta('og:audio'),
+    );
+  }
+
   Future<void> getTrackStats(Track track) => enrichTrack(track);
 
-  /// Resolves actual mp3 URL (uses enrichTrack internally)
   Future<String?> getMp3Url(Track track) async {
     await enrichTrack(track);
     return track.mp3Url;
   }
 
-  /// Кто вошёл, по сохранённым кукам. Имя берём из `PHP.set('activeuser', …)` —
-  /// этот JSON есть на любой странице NG (проверено на главной, /audio,
-  /// /account и профиле автора). Перебор ссылок «*.newgrounds.com», как было
-  /// раньше, цеплял чужие профили из списков на главной.
   Future<NgUser?> getCurrentUser() async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
@@ -183,8 +212,6 @@ class NgRepository {
     }
   }
 
-  /// Страница профиля автора. Если [cookie] не передан, берём сохранённые:
-  /// без сессии NG не рендерит кнопку подписки и `isFollowing` всегда null.
   Future<NgUser?> getUserProfile(String username, {String? cookie}) async {
     try {
       final url = 'https://${username.toLowerCase()}.newgrounds.com';
@@ -194,14 +221,12 @@ class NgRepository {
           : await _connectRaw(url);
       final doc = htmlParser.parse(html);
 
-      // Avatar: og:image or user-icon img
       final avatar = doc
               .querySelector('meta[property="og:image"]')
               ?.attributes['content'] ??
           doc.querySelector('.user-icon img')?.attributes['src'] ??
           doc.querySelector('.usericon img')?.attributes['src'];
 
-      // Parse sidestats dl for age, gender, country, join date
       String? age, gender, country, joinDate, level, exp;
 
       for (final dl in doc.querySelectorAll('dl.sidestats, dl.userdata, dl')) {
@@ -220,7 +245,6 @@ class NgRepository {
         }
       }
 
-      // Parse fans and audio count from .user-header-button
       String? fans, audioCount;
       for (final btn in doc.querySelectorAll('a.user-header-button')) {
         final label = btn.querySelector('span')?.text.trim().toUpperCase() ?? '';
@@ -229,9 +253,6 @@ class NgRepository {
         if (label == 'AUDIO') audioCount = value;
       }
 
-      // Подписан ли текущий пользователь. Разбор — в [parseFaveButton];
-      // там же, почему проверка `.following-user` в DOM всегда врала.
-      // null остаётся, когда кнопки нет (гостевой запрос).
       final isFollowing = parseFaveButton(html, 'initFollowButton')?.active;
 
       return NgUser(
@@ -253,33 +274,34 @@ class NgRepository {
     }
   }
 
-  // ─── Favorites / Follow (favefollow-buttons) ────────────────────────────────
 
-  /// Разбирает кнопку `favefollow` (избранное трека / подписка на автора).
-  ///
-  /// Старая разметка (до 2026) — инлайн-скрипт:
-  /// ```html
-  /// <span class="favefollow-buttons active" id="ffr_…_1">…</span>
-  /// <script>
-  ///   ngutils.initFavoriteButton("#ffr_…_1", "<userkey>", "ff-h-i-lFhE");
-  /// </script>
-  /// ```
-  /// Новая (2026) — скрипта нет: ключ = id без префикса, userkey = глобальный
-  /// `uek`, тип кнопки определяем по содержимому (`fave-item` vs `follow-user`).
-  ///
-  /// В HTML всегда есть ОБА состояния, видимое переключает CSS по классу
-  /// `active` на обёртке. Поэтому «уже в избранном / уже подписан» — это
-  /// `active` у обёртки, а не наличие `.following-user` или
-  /// `.favefollow-remove` в DOM: они есть всегда, и проверка по ним врала
-  /// (из-за этого статус подписки «прыгал» на Подписан).
-  ///
-  /// Без `userkey` POST отвечает 400 Illegal communication attempt.
-  ///
-  /// Публичный, чтобы проверяться тестом без сети.
   NgFaveButton? parseFaveButton(String html, String initFn) {
+    if (initFn == 'initFollowButton') {
+      final m = RegExp(
+        'initFollowButton\\s*\\(\\s*"([^"]+)"\\s*,\\s*"([^"]+)"'
+        '\\s*,\\s*\\{[^}]*"store"\\s*:\\s*"([^"]+)"'
+        '[^}]*"destroy"\\s*:\\s*"([^"]+)"',
+      ).firstMatch(html);
+      if (m != null) {
+        final domId = m.group(1)!.startsWith('#')
+            ? m.group(1)!.substring(1)
+            : m.group(1)!;
+        final wrapper = RegExp(
+          '<span class="favefollow-buttons([^"]*)" id="${RegExp.escape(domId)}"',
+        ).firstMatch(html);
+        return NgFaveButton(
+          key: m.group(2)!,
+          userkey: m.group(2)!,
+          active: wrapper?.group(1)!.contains('active'),
+          followUrl: m.group(3)!.replaceAll('\\/', '/'),
+          unfollowUrl: m.group(4)!.replaceAll('\\/', '/'),
+        );
+      }
+    }
+
     final init = RegExp(
-      'ngutils\\.$initFn\\(\\s*["\']#([^"\']+)["\']\\s*,'
-      '\\s*["\']([^"\']*)["\']\\s*,\\s*["\']([^"\']+)["\']\\s*\\)',
+      'ngutils\\.$initFn\\(\\s*["\' ]#([^"\' ]+)["\' ]\\s*,'
+      '\\s*["\' ]([^"\' ]*)["\' ]\\s*,\\s*["\' ]([^"\' ]+)["\' ]\\s*\\)',
     ).firstMatch(html);
     if (init != null) {
       final domId = init.group(1)!;
@@ -294,11 +316,6 @@ class NgRepository {
       );
     }
 
-    // Новый формат (2026): инлайн-скрипта нет — кнопка самодостаточна:
-    // <span class="favefollow-buttons[ active]" id="ffr_ffr_…_1">
-    //   <a data-action="add" class="fave-item">…</a>
-    // Ключ кнопки — id без префикса «ffr_», userkey — глобальный uek
-    // (jQuery сам подставляет его в POST: `r.data.userkey=O.get('uek')`).
     final wrapper = RegExp(
       r'<span class="favefollow-buttons([^"]*)" id="(ffr_([^"]+))"',
     ).firstMatch(html);
@@ -309,8 +326,6 @@ class NgRepository {
         block.contains('Add To Favorites');
     final isFollowKind =
         block.contains('follow-user') || block.contains('FOLLOW');
-    // initFn задаёт тип: initFavoriteButton — избранное, initFollowButton —
-    // подписка; на странице бывают обе кнопки, выбираем свою.
     final want = initFn == 'initFavoriteButton' ? isFavoriteKind : isFollowKind;
     if (!want) return null;
 
@@ -322,14 +337,12 @@ class NgRepository {
             '';
 
     return NgFaveButton(
-      key: wrapper.group(3)!, // id без ffr_-префикса
+      key: wrapper.group(3)!,
       userkey: uek,
       active: wrapper.group(1)!.contains('active'),
     );
   }
 
-  /// Кусок HTML вокруг [marker] — от 300 символов до маркера до 700 после:
-  /// достаточно, чтобы увидеть содержимое кнопки (add/remove-ссылки).
   String _blockAround(String html, String marker) {
     final i = html.indexOf(marker);
     if (i < 0) return '';
@@ -338,13 +351,6 @@ class NgRepository {
     return html.substring(from, to);
   }
 
-  /// POST в `/favorites/{type}/{add|remove}/{button_key}` с обязательным
-  /// `userkey` в теле. Возвращает подтверждённое состояние из ответа
-  /// или null, если NG отказал.
-  ///
-  /// Публичный парсер ответа — [parseFaveResponse]: сайт в success-колбэке
-  /// читает из JSON только `count_key`/`fave_type`, поля `active` может не
-  /// быть — тогда успехом считаем запрошенное состояние.
   Future<bool?> _postFave({
     required String origin,
     required String type,
@@ -365,19 +371,14 @@ class NgRepository {
               'User-Agent': _userAgent,
               'Cookie': cookie,
               'X-Requested-With': 'XMLHttpRequest',
-              // Без CSRF-токена из <meta> NG отвечает HTML-редиректом
-              // `{"url":"…/favorites"}` — избранное не ставится.
               if (csrfToken != null && csrfToken.isNotEmpty)
                 'X-CSRF-TOKEN': csrfToken,
               'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
               'Accept': 'application/json, text/javascript, */*; q=0.01',
               'Referer': referer,
-              // Браузер всегда шлёт Origin на POST — NG может валидировать
-              // его вместе с CSRF.
               'Origin': origin,
             },
             body: 'userkey=${Uri.encodeQueryComponent(button.userkey)}'
-                // Как в JS сайта: аккаунтам с новым дизайном нужен этот флаг.
                 '${ngDesign != null ? '&___ng_design=${Uri.encodeQueryComponent(ngDesign)}' : ''}',
           )
           .timeout(const Duration(seconds: 15));
@@ -396,9 +397,6 @@ class NgRepository {
     }
   }
 
-  /// Разбор ответа fave-запроса. Явные ошибки (`errors`) — отказ; поле
-  /// `active` опционально: если его нет, считаем, что NG принял запрос.
-  /// Публичный ради теста без сети.
   bool? parseFaveResponse(String body, bool requested) {
     try {
       final json = jsonDecode(body);
@@ -415,11 +413,6 @@ class NgRepository {
     }
   }
 
-  /// Кнопка избранного для трека. На авторизованной странице трека скрипта
-  /// `initFavoriteButton` больше нет: NG подтягивает кнопки отдельным
-  /// компонентом `/projects/audio/{projectId}/load-component/users`
-  /// (projectId ≠ id трека, берём из страницы). Гостю компонент отдаёт 302,
-  /// поэтому сначала пробуем страницу, потом компонент.
   Future<NgFaveButton?> _favoriteButton(
       String trackId, String cookie, String pageHtml) async {
     final direct = parseFaveButton(pageHtml, 'initFavoriteButton');
@@ -454,23 +447,20 @@ class NgRepository {
     }
   }
 
-  /// Переключает избранное на NG и возвращает подтверждённое состояние.
-  /// null — не удалось (нет сессии или NG отклонил).
-  ///
-  /// Новый эндпоинт 2026 (проверен перехватом в DevTools):
-  /// `POST /favorites/audio/{trackId}/favorite` — без ключа кнопки,
-  /// добавление шлёт тело `___ng_design=2015`, снятие — пустое.
-  /// Ответ: `{"active":bool,"fave_type":"favorite",...}`.
   Future<bool?> setFavorite(String trackId, bool add) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
 
     final pageUrl = '$_baseUrl/audio/listen/$trackId';
     try {
-      // Текущее состояние — чтобы не togglenуть лишний раз (POST всегда
-      // переключает, а не ставит).
-      final html = await _connectRawAuth(pageUrl, cookie);
-      final button = await _favoriteButton(trackId, cookie, html);
+      final pageResp = await _fetch(pageUrl, cookie: cookie);
+      if (pageResp.statusCode != 200) {
+        debugPrint('[ng] fav: страница трека -> ${pageResp.statusCode}');
+        return null;
+      }
+      final html = pageResp.body;
+      final cookieForPost = _mergeSetCookie(cookie, pageResp.headers['set-cookie']);
+      final button = await _favoriteButton(trackId, cookieForPost, html);
       if (button == null) {
         debugPrint('[ng] кнопки избранного нет на $pageUrl — '
             'скорее всего, сессия не авторизована');
@@ -483,13 +473,12 @@ class NgRepository {
             Uri.parse('$_baseUrl/favorites/audio/$trackId/favorite'),
             headers: {
               'User-Agent': _userAgent,
-              'Cookie': cookie,
+              'Cookie': cookieForPost,
               'X-Requested-With': 'XMLHttpRequest',
               'X-CSRF-TOKEN': _csrfFrom(html) ?? '',
               'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
               'Accept': 'application/json, text/javascript, */*; q=0.01',
               'Referer': pageUrl,
-              'Origin': _baseUrl,
             },
             body: add ? '___ng_design=2015' : '',
           )
@@ -508,14 +497,32 @@ class NgRepository {
     }
   }
 
-  /// CSRF-токен из `<meta name="csrf-token">` — jQuery NG вставляет его
-  /// в каждый AJAX-запрос заголовком `X-CSRF-TOKEN`.
+  String _mergeSetCookie(String cookie, String? setCookie) {
+    if (setCookie == null || setCookie.isEmpty) return cookie;
+    final jar = <String, String>{};
+    for (final part in cookie.split('; ')) {
+      final i = part.indexOf('=');
+      if (i > 0) jar[part.substring(0, i)] = part.substring(i + 1);
+    }
+    final merged = setCookie;
+    final re = RegExp(r'[^,; ]+=[^;,]*');
+    for (final m in re.allMatches(merged)) {
+      final pair = m.group(0)!;
+      final i = pair.indexOf('=');
+      if (i <= 0) continue;
+      final name = pair.substring(0, i);
+      final value = pair.substring(i + 1);
+      if (value.contains(',')) continue;
+      jar[name] = pair;
+    }
+    return jar.entries.map((e) => e.value).join('; ');
+  }
+
   String? _csrfFrom(String html) =>
       RegExp(r'<meta name="csrf-token" content="([^"]+)"')
           .firstMatch(html)
           ?.group(1);
 
-  /// В избранном ли трек на NG (null — определить не удалось).
   Future<bool?> getFavoriteStatus(String trackId) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
@@ -529,13 +536,6 @@ class NgRepository {
     }
   }
 
-  /// Переключает подписку на автора ([artistUsername] — например
-  /// `staintocton`) и возвращает подтверждённое состояние
-  /// (null — сессии нет либо NG отклонил запрос).
-  ///
-  /// POST уходит на **финальный** origin страницы, а не на тот, что сложили из
-  /// имени: автор мог переименоваться, и старый поддомен отвечает 301 на
-  /// новый (`jotacast` → `jotang`). Ключ кнопки выдан для нового хоста.
   Future<bool?> setFollow(String artistUsername, bool add) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
@@ -553,6 +553,22 @@ class NgRepository {
       }
       if (button.active == add) return add;
 
+      final cookieForPost =
+          _mergeSetCookie(cookie, page.headers['set-cookie']);
+
+      if (button.followUrl != null) {
+        final followReferer =
+            page.request?.url?.toString() ?? '$startUrl/';
+        return _postFollow(
+          url: (add ? button.followUrl : button.unfollowUrl) ?? button.followUrl!,
+          userkey: button.userkey,
+          add: add,
+          cookie: cookieForPost,
+          referer: followReferer,
+          csrfToken: _csrfFrom(page.body),
+        );
+      }
+
       final finalUri = page.request?.url ?? Uri.parse(startUrl);
       final origin = '${finalUri.scheme}://${finalUri.host}';
 
@@ -561,7 +577,7 @@ class NgRepository {
         type: 'follow',
         add: add,
         button: button,
-        cookie: cookie,
+        cookie: cookieForPost,
         referer: '$origin/',
         csrfToken: _csrfFrom(page.body),
       );
@@ -571,8 +587,48 @@ class NgRepository {
     }
   }
 
-  /// Текущий статус подписки на автора (null — определить не удалось,
-  /// например пользователь не залогинен).
+  Future<bool?> _postFollow({
+    required String url,
+    required String userkey,
+    required bool add,
+    required String cookie,
+    required String referer,
+    String? csrfToken,
+  }) async {
+    try {
+      final uri = Uri.parse(url);
+
+      final headers = {
+        'User-Agent': _userAgent,
+        'Cookie': cookie,
+        'X-Requested-With': 'XMLHttpRequest',
+        if (csrfToken != null && csrfToken.isNotEmpty)
+          'X-CSRF-TOKEN': csrfToken,
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Referer': referer,
+      };
+
+      final body =
+          'userkey=${Uri.encodeQueryComponent(userkey)}&___ng_design=2015';
+      final client = http.Client();
+      final response = await client
+          .post(uri, headers: headers, body: body)
+          .timeout(const Duration(seconds: 15));
+      client.close();
+
+      debugPrint('[ng] follow POST -> ${response.statusCode} '
+          '${response.body.length > 300 ? response.body.substring(0, 300) : response.body}');
+      if (response.statusCode == 200) {
+        return parseFaveResponse(response.body, add);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ng] follow $url failed: $e');
+      return null;
+    }
+  }
+
   Future<bool?> getFollowStatus(String artistUsername) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
@@ -585,9 +641,14 @@ class NgRepository {
     }
   }
 
-  // ─── Reviews & Voting ──────────────────────────────────────────────────
 
-  /// `&amp;` → `&` и т.п. — NG экранирует сущности в текстах отзывов.
+  int? parseMyVote(String html) {
+    final m = RegExp(
+      'id="votebar-\\d+"\\s+value="(\\d+)"\\s+checked',
+    ).firstMatch(html);
+    return m == null ? null : int.tryParse(m.group(1)!);
+  }
+
   String _decodeEntities(String s) => s
       .replaceAll('&amp;', '&')
       .replaceAll('&#039;', "'")
@@ -597,9 +658,6 @@ class NgRepository {
       .replaceAll('&gt;', '>')
       .replaceAll('&nbsp;', ' ');
 
-  /// Дата отзыва NG: `2026-05-29 09:50:01` → `May 29, 2026` (без времени).
-  /// Уже сокращённые и относительные даты («about 8 hours ago», «May 29, 2026»)
-  /// проходят без изменений.
   String _fmtReviewDate(String s) {
     final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(s);
     if (m == null) return s;
@@ -612,21 +670,6 @@ class NgRepository {
     return '${months[mi - 1]} ${int.tryParse(m.group(3)!) ?? 0}, ${m.group(1)}';
   }
 
-  /// Разбирает страницу отзывов `/reviews/portal/{id}/3/{sort}/{page}`.
-  /// Карточка (разметка проверена живьём):
-  /// ```html
-  /// <div class="pod-body review" data-review-id="N">
-  ///   <div class="review-meta">
-  ///     <a href="https://{slug}.newgrounds.com" title="Имя">
-  ///       <svg …><image href="аватар"/></svg> <span>Имя</span></a>
-  ///     <time>2026-08-31 11:35:46</time>
-  ///     <a class="ngicon-25-flag" href="/flag/add/N/2003" title="Report Abuse">
-  ///     <span class="score"><div class="star-score" title="Score: 5.00/5.00">
-  ///   </div>
-  ///   <div class="review-body …">текст</div>
-  ///   <div id="review_reactions_N"> … initTotals(#,…,2003,N,N,null)
-  /// ```
-  /// Публичный ради теста без сети.
   List<NgReview> parseReviews(String html) {
     final out = <NgReview>[];
     final cards = RegExp(
@@ -649,7 +692,6 @@ class NgRepository {
       final body = RegExp(r'<div class="review-body[^"]*"[^>]*>([\s\S]*?)</div>')
           .firstMatch(block);
 
-      // Ответ автора: div.authresponse с аватаром, ником и «responds:».
       NgReviewResponse? response;
       final respBlock = RegExp(
               r'<div class="authresponse"[^>]*>([\s\S]*?)</div>\s*</div>')
@@ -688,14 +730,15 @@ class NgRepository {
     return out;
   }
 
-  /// Страница отзывов целиком: список + номер страницы из «Page 1 of 56».
-  /// [sort] — `date` | `score`. Возвращает null при ошибке сети.
   Future<ReviewsPage?> getReviews(String trackId,
       {String sort = 'date', int page = 1}) async {
     final s = sort == 'score' ? 'score' : 'date';
     try {
-      final html = await _connectRaw(
-          '$_baseUrl/reviews/portal/$trackId/3/$s/$page');
+      final url = '$_baseUrl/reviews/portal/$trackId/3/$s/$page';
+      final cookie = await NgAuth.getCookie();
+      final html = (cookie != null && cookie.isNotEmpty)
+          ? await _connectRawAuth(url, cookie)
+          : await _connectRaw(url);
       final pages = RegExp(r'Page</span>\s*\d+\s*of\s*(\d+)')
               .firstMatch(html)?.group(1);
       return ReviewsPage(
@@ -709,10 +752,6 @@ class NgRepository {
     }
   }
 
-  /// Ставит оценку треку: `POST /content/vote/{id}/3`,
-  /// тело `show_fields=1&userkey=…&vote=0..10`.
-  /// [vote] — голос в шкале NG 0..10 (полузвёзды; 1 = ползвезды).
-  /// Возвращает новый score/votes NG, либо null при отказе.
   Future<VoteResult?> voteTrack(String trackId, int vote) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
@@ -748,8 +787,6 @@ class NgRepository {
         return null;
       }
       final parsed = _parseVoteResponse(res.body);
-      // NG после голоса убирает votebar со страницы — храним выбор локально
-      // (в шкале NG 0..10, чтобы полузвёзды не терялись).
       await NgAuth.saveMyVote(trackId, v);
       return parsed;
     } catch (e) {
@@ -758,8 +795,6 @@ class NgRepository {
     }
   }
 
-  /// Из ответа голосования берём `sidestats` (score/votes). Публичный ради
-  /// теста: `score_number` и `Votes` лежат в HTML-фрагменте внутри JSON.
   VoteResult? parseVoteResponsePublic(String body) =>
       _parseVoteResponse(body);
 
@@ -769,15 +804,12 @@ class NgRepository {
       if (json is! Map) return null;
       final side = json['sidestats'];
       if (side is! String) {
-        // NG иногда отвечает без sidestats (уже голосовал) — это не ошибка,
-        // просто сказать нечего.
         return null;
       }
       final score =
           RegExp(r'id="score_number"[^>]*>([\d.]+)<').firstMatch(side);
       final votes =
           RegExp(r'<dt>Votes</dt>\s*<dd>([\d,]+)<').firstMatch(side);
-      // «Waiting for N more votes» — сколько не хватает до публичного балла.
       final waitingM = RegExp(r'Waiting for (\d+) more').firstMatch(side);
       return VoteResult(
         score: double.tryParse(score?.group(1) ?? ''),
@@ -791,10 +823,6 @@ class NgRepository {
     }
   }
 
-  /// Пишет отзыв: `POST /reviews/create/{id}/3` с полями формы
-  /// `userkey`, `generic_id`, `type_id=3`, `vote` (0..10), `body`.
-  /// [stars] — оценка в шкале NG 0..10 (полузвёзды; 0 — без оценки).
-  /// Возвращает текст ошибки NG или null при успехе.
   Future<String?> postReview(
       String trackId, String text, int stars) async {
     final cookie = await NgAuth.getCookie();
@@ -802,7 +830,6 @@ class NgRepository {
 
     final pageUrl = '$_baseUrl/audio/listen/$trackId';
     try {
-      // Форма с userkey живёт прямо на странице трека.
       final html = await _connectRawAuth(pageUrl, cookie);
       final key = _userkeyFrom(html);
       if (key == null) {
@@ -828,15 +855,11 @@ class NgRepository {
           )
           .timeout(const Duration(seconds: 15));
 
-      // Успех — 302 редирект обратно на страницу трека; ошибки формы NG
-      // показывает 200-м с текстом, либо 4xx с JSON.
       if (res.statusCode == 200 ||
           (res.statusCode >= 300 && res.statusCode < 400)) {
         final err = RegExp(r'class="[^"]*(error|alert)[^"]*"[^>]*>([^<]+)')
             .firstMatch(res.body)?.group(2);
         if (err == null) {
-          // Отзыв принят. ID NG выдаёт на следующей странице трека — получим
-          // при первом getMyReview; пока кладём в кэш с пустым id.
           await NgAuth.saveMyReview(trackId, '', text, stars);
           await NgAuth.saveMyVote(trackId, stars);
           return null;
@@ -851,20 +874,19 @@ class NgRepository {
     }
   }
 
-  /// Мой отзыв на странице трека. NG кладёт свою карточку (автор — текущий
-  /// пользователь) в список отзывов прямо на `/audio/listen/{id}`: с кнопками
-  /// `ngicon-25-pencil` → `/reviews/edit/{id}` и `ngicon-25-trash`.
-  /// Возвращает null, если отзыва нет или не удалось определить.
   Future<NgReview?> getMyReview(String trackId) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
     try {
       final html = await _connectRawAuth('$_baseUrl/audio/listen/$trackId', cookie);
       final review = parseMyReview(html);
-      // Синхронизируем локальный кэш (vote — шкала NG 0..10).
       if (review != null) {
         await NgAuth.saveMyReview(trackId, review.id, review.body,
             review.hasScore ? (review.score * 2).round() : null);
+      }
+      final siteVote = parseMyVote(html);
+      if (siteVote != null) {
+        await NgAuth.saveMyVote(trackId, siteVote.clamp(0, 10));
       }
       return review;
     } catch (e) {
@@ -873,15 +895,12 @@ class NgRepository {
     }
   }
 
-  /// Разбирает СВОЮ карточку отзыва со страницы трека. Публичный ради теста.
-  /// Признак карточки — кнопка карандаша `/reviews/edit/{reviewId}` внутри неё.
   NgReview? parseMyReview(String html) {
     final editLink =
         RegExp(r'href="/reviews/edit/(\d+)"').firstMatch(html);
     if (editLink == null) return null;
     final reviewId = editLink.group(1)!;
 
-    // Блок карточки: от открывающего div до кнопки React (дальше — реакции).
     final cardStart = html.lastIndexOf('data-review-id="$reviewId"');
     if (cardStart < 0) return null;
     final from = html.lastIndexOf('<div', cardStart);
@@ -889,11 +908,8 @@ class NgRepository {
     final reactions = seg.indexOf('review_reactions');
     if (reactions > 0) seg = seg.substring(0, reactions);
 
-    // Оценка — `title="Score: 5.00/5.00"` в блоке `.score`.
     final scoreM = RegExp(r'title="Score: ([\d.]+)').firstMatch(seg);
-    // Дата — `<time id="review_time_…">…</time>`.
     final timeM = RegExp(r'<time[^>]*>([^<]+)</time>').firstMatch(seg);
-    // Текст — `<div class="review-body …" id="review_body_…">…</div>`.
     final bodyM = RegExp(r'<div class="review-body[^"]*"[^>]*>([\s\S]*?)</div>')
         .firstMatch(seg);
 
@@ -909,9 +925,6 @@ class NgRepository {
     );
   }
 
-  /// Правит мой отзыв: `POST /reviews/edit/{reviewId}` — те же поля, что у
-  /// создания (`userkey`, `generic_id`, `type_id`, `vote` 0..10, `body`).
-  /// Возвращает текст ошибки NG или null при успехе.
   Future<String?> editReview(
       String reviewId, String trackId, String text, int stars) async {
     final cookie = await NgAuth.getCookie();
@@ -919,7 +932,6 @@ class NgRepository {
 
     final pageUrl = '$_baseUrl/reviews/edit/$reviewId';
     try {
-      // userkey берём из самой формы правки — он там предзаполнен.
       final formHtml = await _connectRawAuth(pageUrl, cookie);
       final key = _userkeyFrom(formHtml);
       if (key == null) {
@@ -960,10 +972,6 @@ class NgRepository {
     }
   }
 
-  /// Ответ автора трека на чужой отзыв: `POST /reviews/responses/create/{reviewId}`
-  /// с полями `userkey` + `body` (разметка формы — probe живьём, сессия сентября).
-  /// Разметка формы отдаётся ТОЛЬКО автору трека — это же и проверка владения:
-  /// если формы/userkey нет, отвечаем 'not your track'.
   Future<String?> postResponse(String reviewId, String text) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return 'not logged in';
@@ -971,7 +979,6 @@ class NgRepository {
     final pageUrl = '$_baseUrl/reviews/responses/create/$reviewId';
     try {
       final formHtml = await _connectRawAuth(pageUrl, cookie);
-      // Нет формы «Your Response» — трек не наш (или отзыв исчез).
       if (!formHtml.contains('response_form_$reviewId')) {
         return 'not your track';
       }
@@ -1011,9 +1018,6 @@ class NgRepository {
     }
   }
 
-  /// Удаляет мой отзыв: GET `/reviews/delete/{reviewId}` (NG показывает
-  /// подтверждение; прямой GET выполняет удаление — подтверждено пробой).
-  /// Возвращает текст ошибки или null при успехе.
   Future<String?> deleteReview(String reviewId, String trackId) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return 'not logged in';
@@ -1033,16 +1037,11 @@ class NgRepository {
     }
   }
 
-  // ─── Cloud playlists (NG account) ────────────────────────────────────────────
 
-  /// `userkey` (в разметке — `uek`) нужен любому POST-запросу NG. Токен
-  /// короткоживущий и привязан к сессии, поэтому кешировать его нельзя.
   String? _userkeyFrom(String html) =>
       RegExp(r"PHP\.set\('uek',\s*'([^']*)'").firstMatch(html)?.group(1) ??
       RegExp(r'name="userkey" value="([^"]+)"').firstMatch(html)?.group(1);
 
-  /// Свежий `userkey`. Для операций с треком берём его из лёгкого диалога
-  /// `/playlists/addentry/<id>/3` (~13 КБ) вместо главной страницы (~180 КБ).
   Future<String?> _fetchUserkey(String cookie, {String? trackId}) async {
     if (trackId != null) {
       try {
@@ -1059,8 +1058,6 @@ class NgRepository {
     }
   }
 
-  /// Идентификаторы из `data-visual-link="[<type>,<id>]"`, в порядке разметки.
-  /// Тип 21000 — плейлист, 3 — аудио. Публичный ради теста.
   List<String> visualLinkIds(String html, int type) {
     final out = <String>[];
     for (final m
@@ -1072,8 +1069,6 @@ class NgRepository {
     return out;
   }
 
-  /// POST `/visual-links-fetch` — «дорисовывает» пустышки `data-visual-link`.
-  /// Ответ: `{"success":true,"partials":{"<type>":{"<id>":"<li>…</li>"}}}`.
   Future<Map<String, String>> _fetchVisualLinks(
     String origin,
     int type,
@@ -1122,19 +1117,12 @@ class NgRepository {
     return out;
   }
 
-  /// Все плейлисты пользователя со страницы `/playlists`.
-  ///
-  /// Страница отдаёт только пустышки `<li data-visual-link="[21000,<id>]">`,
-  /// названия подгружает JS через `/visual-links-fetch`. Раньше здесь искались
-  /// ссылки `a[href*="/playlists/view/"]`, которых в разметке нет, поэтому
-  /// синхронизация всегда возвращала пустой список.
   Future<List<NgCloudPlaylist>> getUserPlaylists(String username) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return [];
     final origin = 'https://${username.toLowerCase()}.newgrounds.com';
 
     final ids = <String>[];
-    // Ограничение сверху, чтобы смена разметки не закрутила цикл навсегда.
     for (var page = 1; page <= 30; page++) {
       final url =
           page == 1 ? '$origin/playlists' : '$origin/playlists?page=$page';
@@ -1171,8 +1159,6 @@ class NgRepository {
     return out;
   }
 
-  /// Треки плейлиста NG. Тот же приём: пустышки `[3,<trackId>]` на странице
-  /// `/playlist/<id>` + `/visual-links-fetch` для настоящей разметки.
   Future<List<Track>> getNgPlaylistTracks(String playlistId) async {
     final cookie = await NgAuth.getCookie();
     final hasCookie = cookie != null && cookie.isNotEmpty;
@@ -1198,8 +1184,6 @@ class NgRepository {
     if (ids.isEmpty) return [];
 
     final partials = await _fetchVisualLinks(_baseUrl, 3, ids, cookie);
-    // Партиалы — те же `<li>` из `ul.itemlist`, что и в поиске: собираем
-    // список в исходном порядке и разбираем существующим парсером.
     final list = ids
         .map((id) => partials[id] ?? '')
         .where((s) => s.isNotEmpty)
@@ -1209,8 +1193,6 @@ class NgRepository {
         htmlParser.parse('<ul class="itemlist">$list</ul>'));
   }
 
-  /// Полный набор плейлистов для диалога добавления: список с профиля
-  /// (авторитетный) + выпадашка `addentry` (гарантированно добавляемые).
   Future<List<NgCloudPlaylist>> getAllNgPlaylists(
       String trackId, String username) async {
     final results = await Future.wait([
@@ -1230,7 +1212,6 @@ class NgRepository {
     return byId.values.toList();
   }
 
-  /// Плейлисты из выпадающего списка диалога `addentry` (последние 20).
   Future<List<NgCloudPlaylist>> getNgPlaylists(String trackId) async {
     try {
       final cookie = await NgAuth.getCookie();
@@ -1252,8 +1233,6 @@ class NgRepository {
     }
   }
 
-  /// Добавляет трек в плейлист NG (существующий — [playlistId], новый —
-  /// [newPlaylistName]). Возвращает id плейлиста или null при ошибке.
   Future<String?> _addEntry(
     String trackId, {
     required String cookie,
@@ -1295,7 +1274,6 @@ class NgRepository {
             '${response.body.substring(0, response.body.length.clamp(0, 300))}');
         return null;
       }
-      // Успех — HTML пода «Added to playlist!» со ссылкой на плейлист.
       return RegExp(r'/playlist/(\d+)').firstMatch(response.body)?.group(1) ??
           playlistId;
     } catch (e) {
@@ -1304,7 +1282,6 @@ class NgRepository {
     }
   }
 
-  /// Добавляет трек в плейлист NG. Совместимая обёртка над [_addEntry].
   Future<bool> addToNgPlaylist(
     String trackId, {
     String? playlistId,
@@ -1319,14 +1296,6 @@ class NgRepository {
     return id != null;
   }
 
-  /// Создаёт плейлист на аккаунте NG и возвращает его id.
-  ///
-  /// Отдельной ручки «создать пустой плейлист» у NG нет: единственная точка
-  /// входа — `/playlists/addentry`, и она требует существующий сабмишен
-  /// (`id`), иначе отвечает 400 «Invalid/missing id». Поэтому когда трека нет
-  /// (кнопка «+ Playlist» в библиотеке), плейлист создаётся с треком-затравкой,
-  /// а сразу после запись удаляется: пустой плейлист остаётся жив и виден
-  /// и в списке `/playlists`, и в диалоге добавления.
   Future<String?> createNgPlaylist(String name, {String? seedTrackId}) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return null;
@@ -1334,7 +1303,6 @@ class NgRepository {
     var seed = seedTrackId;
     final seeded = seed != null && seed.isNotEmpty;
     if (!seeded) {
-      // Любой существующий трек подойдёт: запись из плейлиста удаляется сразу.
       final featured = await getFeaturedTracks();
       if (featured.isEmpty) {
         debugPrint('[ng] createNgPlaylist: не нашли трек-затравку');
@@ -1349,10 +1317,6 @@ class NgRepository {
     return id;
   }
 
-  /// Удаляет запись трека из плейлиста NG.
-  ///
-  /// Записи адресуются собственным id (`data-id` на странице редактирования),
-  /// а не id трека, поэтому сначала читаем `/playlists/edit/<id>`.
   Future<bool> removeFromNgPlaylist(String playlistId, String trackId) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return false;
@@ -1362,7 +1326,6 @@ class NgRepository {
       final userkey = _userkeyFrom(html);
       if (userkey == null) return false;
 
-      // <li … data-id="8095137" data-pos="1" data-visual-link="[3,1564606]">
       String? entryId;
       for (final m in RegExp(
               r'data-id="(\d+)"[^>]*data-visual-link="\[3,(\d+)\]"')
@@ -1403,7 +1366,6 @@ class NgRepository {
     }
   }
 
-  /// Переименовывает плейлист NG (ответ — `{"success":true,"data":{…}}`).
   Future<bool> renameNgPlaylist(String playlistId, String title) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return false;
@@ -1439,7 +1401,6 @@ class NgRepository {
     }
   }
 
-  /// Удаляет плейлист NG (ответ — `{"url":"…/playlists"}`).
   Future<bool> deleteNgPlaylist(String playlistId) async {
     final cookie = await NgAuth.getCookie();
     if (cookie == null || cookie.isEmpty) return false;
@@ -1478,10 +1439,8 @@ class NgRepository {
     }
   }
 
-  // ─── Internals ──────────────────────────────────────────────────────────────
 
-  /// Fallback enrichment using parsed HTML document
-  Future<void> _enrichFallback(Track track, String html) async {
+  void _enrichFallback(Track track, String html) {
     try {
       final doc = htmlParser.parse(html);
       track.mp3Url ??= doc
@@ -1491,17 +1450,9 @@ class NgRepository {
     parseListenDetails(track, html);
   }
 
-  /// Детали сабмишена со страницы `/audio/listen/{id}`: блоки `dl.sidestats`
-  /// (Listens / Faves / Downloads / Votes / Score / Uploaded / Genre / File Info),
-  /// теги из ссылок `/audio/browse/tag/…`, награды `ul.trophies` и аватарка
-  /// автора. Разметка совпадает с тем, что разбирает ng2015 (`audioData.js`).
-  ///
-  /// Публичный, чтобы проверяться тестом на сохранённой странице без сети.
   void parseListenDetails(Track track, String html) {
     try {
       final doc = htmlParser.parse(html);
-      // В <dd> бывает вложен инлайн-скрипт (например у Faves) — его текст
-      // попадает в `.text`, поэтому скрипты выбрасываем сразу.
       for (final el in doc.querySelectorAll('script, style, noscript')) {
         el.remove();
       }
@@ -1525,9 +1476,6 @@ class NgRepository {
             case 'votes':
               track.votes = value;
             case 'score':
-              // Когда голосов меньше пяти, NG вместо балла пишет
-              // «Waiting for N more votes» — честно сохраняем остаток,
-              // чтобы UI не показывал фейковую оценку.
               final waiting = RegExp(r'Waiting for (\d+) more')
                   .firstMatch(value);
               if (waiting != null) {
@@ -1538,7 +1486,6 @@ class NgRepository {
                 if (m != null) track.score = m.group(1);
               }
             case 'uploaded':
-              // «May 27, 2026 7:10 PM EDT» — время не нужно
               final m =
                   RegExp(r'^([A-Z][a-z]{2,8} \d{1,2}, \d{4})').firstMatch(value);
               track.uploaded = m?.group(1) ?? value;
@@ -1551,7 +1498,6 @@ class NgRepository {
         }
       }
 
-      // File Info идёт как несколько <span class="value"> — склеиваем через «|».
       for (final dl in doc.querySelectorAll('dl.sidestats')) {
         final dt = dl.querySelector('dt');
         if (dt == null || dt.text.trim().toLowerCase() != 'file info') continue;
@@ -1564,6 +1510,11 @@ class NgRepository {
       }
 
       final tags = <String>{};
+      for (final a in doc.querySelectorAll('a[href*="match=tags"]')) {
+        final v = Uri.tryParse(a.attributes['href'] ?? '')
+            ?.queryParameters['tags'];
+        if (v != null && v.isNotEmpty) tags.add(v);
+      }
       for (final a in doc.querySelectorAll('a[href*="/audio/browse/tag/"]')) {
         final m = RegExp(r'/audio/browse/tag/([a-z0-9\-]+)')
             .firstMatch(a.attributes['href'] ?? '');
@@ -1575,8 +1526,6 @@ class NgRepository {
           ..length = tags.length > 12 ? 12 : tags.length;
       }
 
-      // Награды: <ul class="trophies"><li class="frontpage"><strong>Frontpaged</strong>
-      //   <a href="/fpa/audio/6/2026">June 17, 2026</a>
       final awards = <TrackAward>[];
       for (final li in doc.querySelectorAll('ul.trophies > li')) {
         final label = li.querySelector('strong')?.text.trim() ?? '';
@@ -1593,7 +1542,6 @@ class NgRepository {
       }
       if (awards.isNotEmpty) track.awards = awards;
 
-      // Аватар автора — любое uimg-изображение в блоке автора.
       final avatar = doc
               .querySelector('.item-icon image')
               ?.attributes['href'] ??
@@ -1605,7 +1553,13 @@ class NgRepository {
         track.authorIcon = avatar.split('?').first;
       }
 
-      // Author Comments — `#author_comments` (картинки внутри нам не нужны).
+      final myVoteM = RegExp(
+        'id="votebar-\\d+"\\s+value="(\\d+)"\\s+checked',
+      ).firstMatch(html);
+      if (myVoteM != null) {
+        track.myVote = int.tryParse(myVoteM.group(1)!);
+      }
+
       final comments = doc.querySelector('#author_comments');
       if (comments != null) {
         final text = comments
@@ -1617,9 +1571,10 @@ class NgRepository {
             ? comments.text.replaceAll(RegExp(r'\s+'), ' ').trim()
             : text;
         if (flat.isNotEmpty) track.description = flat;
+        final raw = comments.innerHtml.trim();
+        if (raw.isNotEmpty) track.descriptionHtml = raw;
       }
 
-      // Licensing Terms — `#creative_commons .pod-body`.
       final cc = doc.querySelector('#creative_commons .pod-body');
       if (cc != null) {
         final text = cc.text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -1628,20 +1583,15 @@ class NgRepository {
     } catch (_) {}
   }
 
-  /// Extracts the real image URL from an <img>, handling lazy-loaded sources.
-  /// Returns the static NG CDN thumbnail (e.g. {id}_medium.webp?cachebust)
-  /// when present, ignoring 1px placeholders.
   String _imgSrc(Element? img) {
     if (img == null) return '';
     for (final attr in ['data-smartload-src', 'data-src', 'src']) {
       final v = img.attributes[attr]?.trim() ?? '';
       if (v.isNotEmpty && v.contains('ngfiles.com')) return v;
     }
-    // Last resort: any non-empty src even if not ngfiles
     return img.attributes['src']?.trim() ?? '';
   }
 
-  /// Parse tracks from artist audio page HTML (a.item-audiosubmission elements)
   List<Track> _parseArtistItems(Document doc, String artist) {
     final result = <Track>[];
     for (final a in doc.querySelectorAll('a.item-audiosubmission')) {
@@ -1654,7 +1604,6 @@ class NgRepository {
 
       final iconUrl = _imgSrc(a.querySelector('img'));
 
-      // Duration from data attribute on parent or self
       final durationStr = a.attributes['data-audio-duration'] ??
           a.parent?.attributes['data-audio-duration'] ?? '';
       final duration = int.tryParse(durationStr) ?? 0;
@@ -1691,14 +1640,16 @@ class NgRepository {
       final playEl = li.querySelector('[data-audio-duration]') ??
           li.querySelector('[data-hub-id]');
 
-      final title = (li.querySelector('h4.item-title') ??
+      final title = (li.querySelector('.detail-title h4') ??
+              li.querySelector('h4.item-title') ??
               li.querySelector('h4') ??
               li.querySelector('.title'))
           ?.text
           .trim();
       if (title == null || title.isEmpty) continue;
 
-      final artist = (li.querySelector('strong') ??
+      final artist = (li.querySelector('.detail-title strong') ??
+              li.querySelector('strong') ??
               li.querySelector('.item-details-main strong') ??
               li.querySelector('.detail-author'))
           ?.text
@@ -1782,11 +1733,7 @@ class NgRepository {
     return result;
   }
 
-  // ─── HTTP helpers ────────────────────────────────────────────────────────────
 
-  /// Заголовки «как у мобильного Chrome». Без полного набора Cloudflare на
-  /// стороне Newgrounds отвечает 403 части клиентов, поэтому шлём всё, что
-  /// отправляет реальный браузер при переходе по ссылке.
   static Map<String, String> _headers({String? cookie, String? referer}) => {
         'User-Agent': _userAgent,
         'Accept':
@@ -1805,18 +1752,6 @@ class NgRepository {
         if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
       };
 
-  /// Один GET со всей диагностикой: при не-200 пишем в лог статус и заголовки
-  /// Cloudflare — иначе причину блокировки на устройстве не отследить.
-  ///
-  /// Редиректы ведём вручную. `package:http` (точнее `dart:io HttpClient` под
-  /// ним) при переходе на другой хост **теряет заголовок `Cookie`** — а NG
-  /// отдаёт 301 на новый поддомен, когда автор сменил имя
-  /// (`jotacast` → `jotang`). Из-за этого приложение получало гостевую версию
-  /// страницы: без `activeuser`, без `initFollowButton` — и подписка падала с
-  /// «сессия не авторизована», хотя куки были рабочие.
-  ///
-  /// У возвращённого ответа `request.url` — финальный адрес после редиректов;
-  /// по нему [setFollow] берёт origin для POST.
   Future<http.Response> _fetch(String url, {String? cookie}) async {
     var target = Uri.parse(url);
     http.Response? response;

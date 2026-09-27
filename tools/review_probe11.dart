@@ -1,6 +1,3 @@
-// Разведка v11: контекст вокруг моей карточки и второй карточки — понять,
-// есть ли заголовок секции отзывов и чей порядок. Плюс /reviews/portal отдаёт
-// только ЧУЖИЕ? (сверка списка id). Запуск: dart run tools/review_probe11.dart [trackId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -21,7 +18,6 @@ Future<void> main(List<String> args) async {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
-  // Страница трека: id всех карточек.
   final listen = await http.get(
       Uri.parse('https://www.newgrounds.com/audio/listen/$trackId'),
       headers: headers(cookie));
@@ -30,7 +26,6 @@ Future<void> main(List<String> args) async {
     print('  ${m.group(1)}');
   }
 
-  // Отдельная страница отзывов: id всех карточек.
   final rev = await http.get(
       Uri.parse('https://www.newgrounds.com/reviews/portal/$trackId/3/date/1'),
       headers: headers(cookie));

@@ -1,5 +1,3 @@
-// Разведка v21: сайдбар жанров аудио — ищем блок sidestats/sideNav на /audio.
-// Запуск: dart run tools/genre_probe4.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -16,7 +14,6 @@ Future<void> main() async {
     print('$pat -> $i');
   }
 
-  // Контекст вокруг "Easy Listening" — это сайдбар жанров аудио.
   final i = b.indexOf('Easy Listening');
   if (i > 0) {
     print('\n=== SIDEBAR CONTEXT ===');

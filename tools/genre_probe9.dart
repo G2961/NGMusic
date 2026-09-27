@@ -1,5 +1,3 @@
-// Разведка v26: сверка жанров карточек с фильтром. Качаем ?genre=15 и
-// /genre/heavy-metal, сверяем жанры в карточках. Запуск: dart run tools/genre_probe9.dart
 import 'package:http/http.dart' as http;
 
 const ua =

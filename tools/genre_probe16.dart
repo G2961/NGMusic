@@ -1,5 +1,3 @@
-// Разведка v34: ID поджанров Podcasts/Voice Acting — их нет в select
-// фильтра. Пробуем genre= с ID 71..120. Запуск: dart run tools/genre_probe16.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -19,7 +17,7 @@ Future<void> main() async {
   final found = <int, Set<String>>{};
   for (var n = 60; n <= 130; n++) {
     final g = await genresOf(n);
-    if (g.isEmpty || g.length > 3) continue; // мусор/дефолт пропускаем
+    if (g.isEmpty || g.length > 3) continue;
     found[n] = g;
     print('$n -> ${g.toList()}');
   }

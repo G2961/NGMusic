@@ -1,8 +1,3 @@
-// Разведка v36: Voice Acting / Podcasts не фильтруются числом — проверяем,
-// отдают ли они треки через voice-жанры в карточках: genre=31 (menu id)?
-// Проще: сверим, что фильтр browse для них без ID — убираем из модели
-// поджанры этих групп и оставляем только реальные ID. Финальная проверка
-// всех ID из справочника. Запуск: dart run tools/genre_probe18.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -35,7 +30,6 @@ Future<void> main() async {
         .map((m) => m.group(1)!.trim())
         .where((g) => g.isNotEmpty)
         .toSet();
-    // Фильтр считается верным, если ВСЕ жанры карточек == ожидание.
     final expect = e.value;
     final good = genres.isNotEmpty && genres.every((g) => g == expect);
     if (good) {

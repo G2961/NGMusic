@@ -10,14 +10,32 @@ import 'ui/screens/account_screen.dart';
 import 'ui/screens/player_screen.dart';
 import 'ui/theme/ng_theme.dart';
 import 'ui/widgets/ng_chrome.dart';
+import 'ui/widgets/ng_player.dart';
 import 'ui/widgets/ng_retro.dart';
 
 import 'viewmodel/ng_viewmodel.dart';
 import 'viewmodel/library_viewmodel.dart';
 
+class NoStretchScrollBehavior extends MaterialScrollBehavior {
+  const NoStretchScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
+}
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(NgMusicApp(handler: NgAudioHandler()));
+  ThemeController.load().then((_) {
+    runApp(NgMusicApp(handler: NgAudioHandler()));
+  });
 }
 
 class NgMusicApp extends StatelessWidget {
@@ -31,23 +49,44 @@ class NgMusicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NgViewModel(handler)),
         ChangeNotifierProvider(create: (_) => LibraryViewModel()),
       ],
-      child: MaterialApp(
-        title: 'NGMusic',
-        theme: ngTheme,
-        home: const _RootShell(),
+      child:
+          ListenableBuilder(
+        listenable: themeCtl,
+        builder: (context, _) => MaterialApp(
+          title: 'NGMusic',
+          scrollBehavior: const NoStretchScrollBehavior(),
+          theme: ngTheme,
+          themeAnimationDuration: Duration.zero,
+          home: KeyedSubtree(
+            key: ValueKey('shell-${themeCtl.mode.name}'),
+            child: const _RootShell(),
+          ),
+        ),
       ),
     );
   }
 }
 
 class _RootShell extends StatefulWidget {
-  const _RootShell();
+  const _RootShell({super.key});
   @override
   State<_RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<_RootShell> {
-  final _page = PageController();
+class _RootShellState extends State<_RootShell>
+    with TickerProviderStateMixin {
+  late final AnimationController _nav = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+    value: 0,
+  );
+
+  late final AnimationController _switch = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1,
+  );
+
   int _idx = 0;
   String? _lastSyncedUser;
 
@@ -59,16 +98,16 @@ class _RootShellState extends State<_RootShell> {
 
   @override
   void dispose() {
-    _page.dispose();
+    _nav.dispose();
+    _switch.dispose();
     super.dispose();
   }
 
   void _go(int i) {
-    _page.animateToPage(
-      i,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-    );
+    if (i == _idx) return;
+    setState(() => _idx = i);
+    _nav.animateTo(i.toDouble(), curve: Curves.easeOutCubic);
+    _switch.forward(from: 0);
   }
 
   @override
@@ -76,7 +115,6 @@ class _RootShellState extends State<_RootShell> {
     final vm = context.watch<NgViewModel>();
     final lvm = context.read<LibraryViewModel>();
 
-    // Sync NG playlists when user logs in
     final user = vm.currentUser;
     if (user != null && user.username != _lastSyncedUser) {
       _lastSyncedUser = user.username;
@@ -90,33 +128,48 @@ class _RootShellState extends State<_RootShell> {
       });
     }
 
+    final landscape = MediaQuery.of(context).size.width > MediaQuery.of(context).size.height;
+    final railInLandscape = landscape && themeCtl.textured;
+
+    final Widget stack = KeyedSubtree(
+      key: ValueKey('shell-${railInLandscape ? 'rail' : 'bottom'}'),
+      child: FadeTransition(
+        opacity: CurvedAnimation(parent: _switch, curve: Curves.easeOut),
+        child: SlideTransition(
+          position: Tween(
+            begin: const Offset(0, 0.06),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: _switch, curve: Curves.easeOutCubic)),
+          child: IndexedStack(index: _idx, children: _screens),
+        ),
+      ),
+    );
+
+    if (railInLandscape) {
+      return Scaffold(
+        backgroundColor: ngBlack,
+        body: Row(
+          children: [
+            Expanded(child: stack),
+            NgNavRail(index: _idx, onSelect: _go),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: ngBlack,
-      body: PageView(
-        controller: _page,
-        // Жестов перелистывания нет — только клик по кнопкам, чтобы не
-        // конфликтовать со свайпами вкладок внутри самих экранов.
-        physics: const NeverScrollableScrollPhysics(),
-        onPageChanged: (i) => setState(() => _idx = i),
-        children: _screens,
-      ),
-      // Компактный плеер в ландшафте живёт внутри левой панели хаба
-      // (см. HubScreen), поэтому здесь — только навбар. В портрете —
-      // полоса мини-плеера над навбаром.
+      body: stack,
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           AnimatedBuilder(
-            animation: _page,
+            animation: _nav,
             builder: (_, __) {
-              final landscape = MediaQuery.of(context).size.width >
-                  MediaQuery.of(context).size.height;
               return landscape
                   ? NgBottomNav(
                       index: _idx,
-                      progress: _page.hasClients
-                          ? _page.page ?? _idx.toDouble()
-                          : _idx.toDouble(),
+                      progress: _nav.value,
                       onSelect: _go,
                     )
                   : Column(
@@ -125,9 +178,7 @@ class _RootShellState extends State<_RootShell> {
                         if (vm.currentTrack != null) NgMiniPlayer(),
                         NgBottomNav(
                           index: _idx,
-                          progress: _page.hasClients
-                              ? _page.page ?? _idx.toDouble()
-                              : _idx.toDouble(),
+                          progress: _nav.value,
                           onSelect: _go,
                         ),
                       ],
@@ -140,14 +191,8 @@ class _RootShellState extends State<_RootShell> {
   }
 }
 
-// ─── Мини-плеер над нижней навигацией ───────────────────────────
 
-/// Мини-плеер 2024: плоская тёмная полоса, транспорт слева, центр —
-/// название/автор, справа heart и время; снизу тонкий оранжевый
-/// прогресс (вместо полосок 2015). Порядок кнопок прежний.
-/// Во время загрузки трека вместо прогресса бежит сегмент-индикатор.
 class NgMiniPlayer extends StatefulWidget {
-  /// Ультра-компактная вертикальная карточка для левой панели в ландшафте.
   final bool compact;
 
   const NgMiniPlayer({super.key, this.compact = false});
@@ -163,7 +208,6 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
   @override
   void initState() {
     super.initState();
-    // Бегущая полоска загрузки: цикл 700ms, как в 2024-дизайне NG.
     _load = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -187,7 +231,6 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
     final lvm = context.watch<LibraryViewModel>();
     final isFav = lvm.isFavorite(track.id);
 
-    // Тикер бежит только пока трек грузится — батарея не тратится.
     if (vm.isLoadingTrack && !_load.isAnimating) _load.repeat();
     if (!vm.isLoadingTrack && _load.isAnimating) _load.stop();
 
@@ -195,8 +238,40 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
     final landscape = media.size.width > media.size.height;
     final compact = widget.compact;
 
-    // ── Транспорт (кнопки) — общие для обеих раскладок.
-    final transport = compact
+    final transport = themeCtl.textured
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              NgGlyphButton(
+                  glyph: NgGlyph.prev,
+                  glyphSize: 16,
+                  hitSize: 30,
+                  onTap: vm.hasPrev() ? vm.playPrev : null),
+              NgGlyphButton(
+                glyph: vm.isPlaying ? NgGlyph.pause : NgGlyph.play,
+                glyphSize: 20,
+                hitSize: 36,
+                onTap: vm.isLoadingTrack ? null : vm.togglePlayPause,
+              ),
+              NgGlyphButton(
+                  glyph: NgGlyph.next,
+                  glyphSize: 16,
+                  hitSize: 30,
+                  onTap: vm.hasNext() ? vm.playNext : null),
+              GestureDetector(
+                onTap: () => lvm.toggleFavorite(track),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    size: 16,
+                    color: isFav ? ngRed : ngDim,
+                  ),
+                ),
+              ),
+            ],
+          )
+        : compact
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -226,7 +301,7 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
             children: [
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.skip_previous, size: 22, color: ngText),
+                icon: Icon(Icons.skip_previous, size: 22, color: ngText),
                 onPressed: vm.hasPrev() ? vm.playPrev : null,
               ),
               IconButton(
@@ -240,7 +315,7 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.skip_next, size: 22, color: ngText),
+                icon: Icon(Icons.skip_next, size: 22, color: ngText),
                 onPressed: vm.hasNext() ? vm.playNext : null,
               ),
               GestureDetector(
@@ -257,15 +332,63 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
             ],
           );
 
-    // Тексты таймера «позиция / длительность».
     String fmt(Duration d) =>
         '${d.inMinutes.toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
     final timeLabel = '${fmt(vm.position)} / ${fmt(dur ?? Duration.zero)}';
 
-    // ── Компактная карточка (левая панель ландшафта): обложка, название,
-    // таймер, транспорт — всё в вертикальной стопке по макету.
     Widget bar;
-    if (compact) {
+    if (compact && themeCtl.textured) {
+      bar = Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+        decoration: BoxDecoration(
+          color: ngBlack,
+          border: Border.fromBorderSide(
+              BorderSide(color: const Color(0xFF2A2724))),
+          borderRadius: BorderRadius.circular(2),
+        ),
+        padding: const EdgeInsets.all(6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                NgTrackIcon(url: track.aIconUrl, size: 40),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(track.title,
+                          style: ngLink,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      Text(track.artist,
+                          style: ngLabel.copyWith(color: ngText),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            NgTimeLabel(
+                position: vm.position, duration: dur, fontSize: 10),
+            const SizedBox(height: 2),
+            NgStripedBar(
+              value: progress,
+              height: 8,
+              phase: vm.isLoadingTrack ? _load.value * 16 : 0,
+            ),
+            const SizedBox(height: 2),
+            Center(child: transport),
+          ],
+        ),
+      );
+    } else if (compact) {
       bar = Container(
         width: double.infinity,
         margin: const EdgeInsets.fromLTRB(6, 0, 6, 8),
@@ -288,16 +411,15 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Таймер — справа сверху, как на макете.
                       Text(timeLabel,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Arial',
                               color: ngDim,
                               fontSize: 9,
                               fontFeatures: [FontFeature.tabularFigures()])),
                       const SizedBox(height: 2),
                       Text(track.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Arial',
                               color: ngWhite,
                               fontSize: 12,
@@ -333,7 +455,7 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(track.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Arial',
                           color: ngWhite,
                           fontSize: 13,
@@ -348,13 +470,12 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
               ),
             ),
             const SizedBox(width: 8),
-            // Правый блок: таймер сверху, транспорт под ним.
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(timeLabel,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Arial',
                         color: ngDim,
                         fontSize: 10,
@@ -366,10 +487,46 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
         ),
       );
     } else {
-      // ── Портрет: прежняя полоса 56px.
-      bar = Container(
-        height: 56,
-        color: ngPodBg,
+      bar = themeCtl.textured
+          ? Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: ngBlack,
+                border: const Border(
+                  top: BorderSide(color: Color(0xFF2A2724)),
+                ),
+              ),
+              padding: const EdgeInsets.only(left: 6, right: 4),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: NgTrackIcon(url: track.aIconUrl, size: 42),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(track.title,
+                            style: ngLink,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        Text(track.artist,
+                            style: ngLabel.copyWith(color: ngText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                        const SizedBox(width: 6),
+                        transport,
+                      ],
+                    ),
+                  )
+                : Container(
+                    height: 56,
+                    color: ngPodBg,
         padding: const EdgeInsets.only(left: 6, right: 4),
         child: Row(
           children: [
@@ -383,7 +540,7 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(track.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Arial',
                           color: ngWhite,
                           fontSize: 13,
@@ -419,16 +576,13 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
         ),
       ),
       child: SafeArea(
-        // Только горизонтальные отступы под вырезы/чёлки: вертикальные
-        // не нужны (панель и так прижата к низу Scaffold'а).
         top: false,
         bottom: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             bar,
-            // Прогресс — тонкая линия (2024); в компактной карточке не нужна.
-            if (!compact)
+            if (!compact && !themeCtl.textured)
               SizedBox(
                 height: 3,
                 width: double.infinity,
@@ -437,16 +591,12 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
                       animation: _load,
                       builder: (context, _) {
                         final t = _load.value;
-                        // Ведущий край выбегает слева за первые 60% цикла,
-                        // хвост догоняет справа — сегмент «протекает» по полосе.
                         final head = t < 0.6
                             ? Curves.easeOutCubic.transform(t / 0.6)
                             : 1.0;
                         final tail = t < 0.4
                             ? 0.0
                             : Curves.easeInCubic.transform((t - 0.4) / 0.6);
-                        // Позиция сегмента: центр (head+tail)/2, ширина head-tail;
-                        // минимум 4%, чтобы индикатор не исчезал на краях цикла.
                         final width = (head - tail).clamp(0.04, 1.0);
                         final center = (head + tail) / 2;
                         final x = ((center * 2 - 1) / (1 - width))
@@ -456,7 +606,7 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
                           child: FractionallySizedBox(
                             alignment: Alignment(x, 0),
                             widthFactor: width,
-                            child: const ColoredBox(color: ngPlayerYellow),
+                            child: ColoredBox(color: ngPlayerYellow),
                           ),
                         );
                       },
@@ -474,7 +624,6 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
     );
   }
 
-  /// Компактная транспортная иконка для ультра-компактной карточки.
   Widget _miniIcon(IconData icon, double size, VoidCallback? onPressed) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -486,4 +635,3 @@ class _NgMiniPlayerState extends State<NgMiniPlayer>
     );
   }
 }
-

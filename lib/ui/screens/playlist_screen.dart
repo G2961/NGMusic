@@ -10,11 +10,8 @@ import '../widgets/ng_retro.dart';
 import 'artist_screen.dart';
 import 'player_screen.dart';
 
-/// Аудио-портал 2015 носил зелёный скин (`body.green`).
 const _skin = NgSkin.gold;
 
-/// Содержимое плейлиста в вёрстке 2015: один под на весь экран, внутри —
-/// строки `table.audiolist tr` с чередованием фона.
 class PlaylistScreen extends StatefulWidget {
   final Playlist playlist;
   const PlaylistScreen({super.key, required this.playlist});
@@ -27,8 +24,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   List<PlaylistTrack> _tracks = [];
   bool _loading = true;
 
-  /// Для зеркала NG: кэш пуст, но сверка с сайтом ещё идёт — показываем
-  /// загрузку, а не «No tracks»: честный ответ «пусто» только после сверки.
   bool _checking = false;
   late Playlist _playlist = widget.playlist;
 
@@ -39,8 +34,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Future<void> _load() async {
-    // Кэш отдаётся сразу, для зеркала NG тихо сверяется с сайтом в фоне —
-    // свежий список приедет в onSynced (новые добавятся, удалённые уйдут).
     final lvm = context.read<LibraryViewModel>();
     final isNg = _playlist.ngId != null;
     final cached = await lvm.loadPlaylistTracks(_playlist, onSynced: (fresh) {
@@ -54,7 +47,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     setState(() {
       _tracks = cached;
       _loading = false;
-      // Кэш пуст, а сверка с NG в полёте — крутим загрузку до её ответа.
       _checking = isNg && cached.isEmpty;
     });
   }
@@ -67,8 +59,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     final Widget body;
     if (_loading || (_checking && _tracks.isEmpty)) {
-      // Первое открытие: кэш пуст и/или идёт сверка с NG — честно показываем
-      // загрузку. «No tracks» — только после ответа сайта, если и там пусто.
       body = const SingleChildScrollView(child: NgLoading());
     } else if (_tracks.isEmpty) {
       body = const SingleChildScrollView(
@@ -136,14 +126,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   Future<void> _removeTrack(PlaylistTrack pt) async {
     final lvm = context.read<LibraryViewModel>();
-    // Оптимистично убираем из списка сразу — не ждём сеть.
     setState(() => _tracks.removeWhere((t) => t.trackId == pt.trackId));
     final ok = await lvm.removeTrackFromPlaylist(_playlist.id!, pt.trackId);
     if (!mounted) return;
     if (!ok) {
       _snack(lvm.lastError ?? 'Failed to remove track', ok: false);
       lvm.clearError();
-      await _load(); // вернуть как было
+      await _load();
     }
   }
 
@@ -190,7 +179,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   void _snack(String text, {bool ok = true}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+      content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ok ? ngOrange : ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),
@@ -199,9 +188,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 }
 
-// ─── Шапка ────────────────────────────────────────────────────────────────────
 
-/// Чёрная полоса `.sitelinks`: «назад», название, кнопки правки и удаления.
 class _TopBar extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -221,7 +208,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),
@@ -268,7 +255,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ─── Строка трека ─────────────────────────────────────────────────────────────
 
 class _PlaylistTrackRow extends StatelessWidget {
   final int index;
@@ -297,6 +283,9 @@ class _PlaylistTrackRow extends StatelessWidget {
       artist: pt.artist,
       playing: isActive,
       paused: isActive && !vm.isPlaying,
+      onIconTap: () => isActive
+          ? vm.togglePlayPause()
+          : vm.playTrack(LocalDb.playlistTrackToTrack(pt)),
       onTap: () {
         final tracks = allTracks.map(LocalDb.playlistTrackToTrack).toList();
         vm.setQueueContext(tracks);
@@ -337,9 +326,7 @@ class _PlaylistTrackRow extends StatelessWidget {
   }
 }
 
-// ─── Диалоги ──────────────────────────────────────────────────────────────────
 
-/// Переименование: под с полем ввода, возвращает новое имя или null.
 class _RenameDialog extends StatefulWidget {
   final String initial;
   const _RenameDialog({required this.initial});
@@ -369,7 +356,6 @@ class _RenameDialogState extends State<_RenameDialog> {
 
   void _submit() {
     final name = _ctrl.text.trim();
-    // NG требует минимум 3 символа (minlength в форме /playlists/edit).
     if (name.isEmpty || name == widget.initial) {
       Navigator.pop(context);
       return;
@@ -391,7 +377,7 @@ class _RenameDialogState extends State<_RenameDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Playlist name', style: ngLabel),
+            Text('Playlist name', style: ngLabel),
             const SizedBox(height: 5),
             NgTextField(
               controller: _ctrl,
@@ -417,7 +403,6 @@ class _RenameDialogState extends State<_RenameDialog> {
   }
 }
 
-/// Подтверждение удаления. Для зеркала NG предупреждает, что уйдёт и с сайта.
 class _ConfirmDeleteDialog extends StatelessWidget {
   final String name;
   final bool onNewgrounds;
@@ -444,7 +429,7 @@ class _ConfirmDeleteDialog extends StatelessWidget {
             Text('«$name» will be permanently deleted.', style: ngBody),
             if (onNewgrounds) ...[
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'This playlist lives on your Newgrounds account — '
                 'it will be deleted there too.',
                 style: ngBodySmall,

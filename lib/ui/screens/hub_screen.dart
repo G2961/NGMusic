@@ -14,14 +14,6 @@ import 'player_screen.dart';
 import 'artist_screen.dart';
 import 'login_screen.dart';
 
-/// Аудио-портал Newgrounds 2015: чёрная шапка с логотипом и поиском,
-/// полоса плашек-разделов (`.navbar`) и под с треками на весь экран.
-///
-/// Сайдбар жанров (`ul.sideNav`) по умолчанию СКРЫТ — открывается кнопкой
-/// слева от поиска (мобильный паттерн NG 2015 «mobile-menu»).
-///
-/// Портал аудио в 2015 году носил зелёный скин (`body.green`), поэтому все
-/// поды и чередование строк здесь — зелёные.
 class HubScreen extends StatefulWidget {
   const HubScreen({super.key});
   @override
@@ -33,26 +25,18 @@ class _HubScreenState extends State<HubScreen>
   late TabController _tab;
   int _idx = 0;
 
-  /// Вкладка, для которой уже применён setActiveTab (листенер TabController
-  /// тикает чаще, чем реально меняется вкладка).
   NgTab _currentTab = NgTab.featured;
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
 
-  /// Сайдбар жанров: по умолчанию закрыт.
   bool _menuOpen = false;
 
-  /// Поиск-строка уезжает вверх при прокрутке ленты вниз и возвращается,
-  /// когда листают вверх или вернулись в начало списка.
-  /// 0 — полностью видна, 1 — полностью спрятана. Жёстко привязана к скроллу:
-  /// скорость съезда равна скорости пальца, а после жеста авто-доезжает
-  /// до ближайшего конца.
-  double _searchProgress = 0;
+  final ValueNotifier<double> _searchProgress = ValueNotifier(0);
 
-  /// Доводчик прогресса после жеста (null — не работает).
   AnimationController? _searchAnim;
 
-  /// Высота строки поиска (плашка едет на эту величину за прогресс 0→1).
+  Tween<double>? _searchTween;
+
   static const _searchBarH = 42.0;
 
   static const _tabs = [
@@ -62,10 +46,8 @@ class _HubScreenState extends State<HubScreen>
     NgTab.topRated,
   ];
 
-  /// Плашки навбара.
   static const _tabLabels = ['Featured', 'New', 'Popular', 'Top Rated'];
 
-  /// Заголовки подов — как назывались блоки на audio.newgrounds.com.
   static const _podTitles = [
     'Featured Audio',
     "Brand Spankin' New Audio",
@@ -79,14 +61,10 @@ class _HubScreenState extends State<HubScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: _tabs.length, vsync: this);
-    // Слушаем именно `animation`, а не сам контроллер: `index` меняется
-    // только когда свайп уже устоялся, и плашка загоралась с задержкой.
     _tab.animation!.addListener(_onTabAnim);
     _tab.addListener(_onTabChanged);
   }
 
-  /// Подсветку ведём от позиции анимации: плашка переключается на
-  /// середине жеста, а не после его окончания.
   void _onTabAnim() {
     final i = _tab.animation!.value.round().clamp(0, _tabs.length - 1);
     if (i != _idx && mounted) setState(() => _idx = i);
@@ -94,14 +72,10 @@ class _HubScreenState extends State<HubScreen>
 
   void _onTabChanged() {
     if (_tab.indexIsChanging) return;
-    // Тикcer TabController'а дёргает листенер и во время драга страниц,
-    // когда индекс ещё старый — сбрасывать надо только при реальной смене.
     final tab = _tabs[_tab.index];
     if (tab == _currentTab) return;
     _currentTab = tab;
     context.read<NgViewModel>().setActiveTab(tab);
-    // Новая вкладка начинается сверху — плашка плавно выезжает обратно,
-    // даже если на предыдущей её спрятали.
     _animateSearchTo(0, duration: const Duration(milliseconds: 280));
   }
 
@@ -111,6 +85,7 @@ class _HubScreenState extends State<HubScreen>
     _tab.removeListener(_onTabChanged);
     _tab.dispose();
     _searchAnim?.dispose();
+    _searchProgress.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -131,14 +106,14 @@ class _HubScreenState extends State<HubScreen>
     final landscape = MediaQuery.of(context).size.width >
         MediaQuery.of(context).size.height;
 
-    return Scaffold(
+    return KeyedSubtree(
+      key: ValueKey('hub-$landscape'),
+      child: Scaffold(
       backgroundColor: ngBlack,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            // Шапка всегда сверху — сайдбар её не перекрывает. В ландшафте
-            // поиск встроен прямо в шапку (между лого и ником), фиксированный.
             NgLogoBar(
               username: vm.currentUser?.username,
               avatarUrl: vm.currentUser?.avatarUrl,
@@ -152,65 +127,57 @@ class _HubScreenState extends State<HubScreen>
                     )
                   : null,
               middle: landscape
-                  ? Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: NgSearchBar(
-                          controller: _searchCtrl,
-                          focusNode: _searchFocus,
-                          searching: vm.isInSearch,
-                          onSubmit: _onSearch,
-                          onClear: () => _onSearch(''),
-                        ),
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: NgSearchBar(
+                        controller: _searchCtrl,
+                        focusNode: _searchFocus,
+                        searching: vm.isInSearch,
+                        onSubmit: _onSearch,
+                        onClear: () => _onSearch(''),
                       ),
                     )
                   : null,
             ),
-            // Ниже шапки: контент + выдвижной сайдбар.
             Expanded(
               child: Stack(
                 children: [
-                  // Портрет: поиск (прячется при скролле) → плашки вкладок
-                  // → контент. Ландшафт: поиск уже в шапке, вкладки —
-                  // стопкой слева внутри _hubContent.
                   Column(
                     children: [
                       if (!landscape)
-                        // Плашка поиска едет 1:1 со скроллом (см.
-                        // _onScrollNotification): высота сжимается, контент
-                        // уезжает вверх, не пересоздаваясь.
-                        SizedBox(
-                          height: _searchBarH * (1 - _searchProgress),
-                          child: ClipRect(
-                            child: OverflowBox(
-                              alignment: Alignment.topLeft,
-                              maxHeight: _searchBarH,
-                              child: Row(
-                                children: [
-                                  // Гамбургер: открывает сайдбар жанров.
-                                  NgIconButton(
-                                    icon: 'menu',
-                                    padding: 10,
-                                    tooltip: 'Browse genres',
-                                    onTap: () =>
-                                        setState(() => _menuOpen = !_menuOpen),
-                                  ),
-                                  Expanded(
-                                    child: NgSearchBar(
-                                      controller: _searchCtrl,
-                                      focusNode: _searchFocus,
-                                      searching: vm.isInSearch,
-                                      onSubmit: _onSearch,
-                                      onClear: () => _onSearch(''),
+                        ValueListenableBuilder<double>(
+                          valueListenable: _searchProgress,
+                          builder: (_, progress, __) => SizedBox(
+                            height: _searchBarH * (1 - progress),
+                            child: ClipRect(
+                              child: OverflowBox(
+                                alignment: Alignment.topLeft,
+                                maxHeight: _searchBarH,
+                                child: Row(
+                                  children: [
+                                    NgIconButton(
+                                      icon: 'menu',
+                                      padding: 10,
+                                      tooltip: 'Browse genres',
+                                      onTap: () => setState(
+                                          () => _menuOpen = !_menuOpen),
                                     ),
-                                  ),
-                                ],
+                                    Expanded(
+                                      child: NgSearchBar(
+                                        controller: _searchCtrl,
+                                        focusNode: _searchFocus,
+                                        searching: vm.isInSearch,
+                                        onSubmit: _onSearch,
+                                        onClear: () => _onSearch(''),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       if (!landscape)
-                        // Плашки вкладок: Featured / New / Popular / Top Rated.
                         AnimatedBuilder(
                           animation: _tab.animation!,
                           builder: (_, __) => NgNavPlates(
@@ -227,15 +194,12 @@ class _HubScreenState extends State<HubScreen>
                     ],
                   ),
 
-                  // ── Выдвижной сайдбар жанров (плавный, под логотипом) ─
-                  // Затемнение появляется только когда меню открыто.
                   if (_menuOpen)
                     ModalBarrier(
                       color: ngBlack.withValues(alpha: 0.72),
                       dismissible: true,
                       onDismiss: () => setState(() => _menuOpen = false),
                     ),
-                  // Само меню выезжает слева AnimatedSlide'ом.
                   AnimatedSlide(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOut,
@@ -259,13 +223,10 @@ class _HubScreenState extends State<HubScreen>
           ],
         ),
       ),
+      ),
     );
   }
 
-  /// Общий контент хаба: результаты поиска или страницы вкладок.
-  /// В ландшафте плашки-«трапки» едут в колонку слева, список — справа.
-  /// Скролл-нотификации ловим здесь: лента вниз — поиск уезжает,
-  /// лента вверх (или в начале списка) — возвращается.
   Widget _hubContent(NgViewModel vm, bool landscape) {
     Widget content = vm.isInSearch
         ? _SearchResults(vm: vm)
@@ -281,36 +242,37 @@ class _HubScreenState extends State<HubScreen>
             ],
           );
     if (landscape) {
-      content = Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AnimatedBuilder(
-            animation: _tab.animation!,
-            builder: (_, __) => Column(
-              children: [
-                NgNavPlatesSide(
-                  labels: _tabLabels,
-                  index: _idx,
-                  onSelect: (i) => _tab.animateTo(i),
-                  progress: _tab.animation?.value ?? _idx.toDouble(),
-                ),
-                // Ультра-компактный плеер прижат к низу левой панели.
-                const Spacer(),
-                if (vm.currentTrack != null)
-                  SizedBox(
-                    width: 170,
-                    child: NgMiniPlayer(compact: true),
+      content = IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedBuilder(
+              animation: _tab.animation!,
+              builder: (_, __) => Column(
+                children: [
+                  NgNavPlatesSide(
+                    labels: _tabLabels,
+                    index: _idx,
+                    onSelect: (i) => _tab.animateTo(i),
+                    progress: _tab.animation?.value ?? _idx.toDouble(),
                   ),
-              ],
+                  const Spacer(),
+                  if (vm.currentTrack != null)
+                    SizedBox(
+                      width: 170,
+                      child: NgMiniPlayer(compact: true),
+                    ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8, right: 6, top: 8),
-              child: content,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8, right: 6, top: 8),
+                child: content,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
     return NotificationListener<ScrollNotification>(
@@ -319,65 +281,50 @@ class _HubScreenState extends State<HubScreen>
     );
   }
 
-  /// Скролл движется — плашка едет ровно на величину дельты (1:1), поэтому
-  /// скорость исчезновения равна скорости пальца. Overscroll ловим тоже:
-  /// на коротких страницах (спиннер загрузки, «Nothing here yet») тянуть
-  /// нечему, и вниз-драг доходит только как overscroll. На паузе/в конце
-  /// жеста — короткий доводчик до ближайшего конца.
   bool _onScrollNotification(ScrollNotification n) {
-    // Горизонтальные скроллы (переключение страниц вкладок TabBarView)
-    // не должны трогать плашку: иначе свайп на соседнюю вкладку
-    // уносил её вверх, и на новой вкладке поиск был спрятан.
     if (n.metrics.axis != Axis.vertical) return false;
     if (n is ScrollUpdateNotification || n is OverscrollNotification) {
       final delta = n is ScrollUpdateNotification
           ? (n.scrollDelta ?? 0)
           : (n as OverscrollNotification).overscroll;
-      // Живой жест всегда сильнее доводчика.
       if (delta != 0 && _searchAnim != null) {
         _searchAnim!.stop();
-        _searchAnim!.dispose();
         _searchAnim = null;
       }
-      final next = (_searchProgress + delta / _searchBarH).clamp(0.0, 1.0);
-      if (next != _searchProgress) {
-        setState(() => _searchProgress = next);
+      final next =
+          (_searchProgress.value + delta / _searchBarH).clamp(0.0, 1.0);
+      if (next != _searchProgress.value) {
+        _searchProgress.value = next;
       }
     } else if (n is ScrollEndNotification) {
       if (n.metrics.pixels <= 0) {
-        // Вернулись в начало списка — строка возвращается целиком.
         _animateSearchTo(0);
-      } else if (_searchProgress > 0 && _searchProgress < 1) {
-        // Куда доезжать, решает прогресс.
-        _animateSearchTo(_searchProgress >= 0.5 ? 1 : 0);
+      } else if (_searchProgress.value > 0 && _searchProgress.value < 1) {
+        _animateSearchTo(_searchProgress.value >= 0.5 ? 1 : 0);
       }
     }
     return false;
   }
 
-  /// Плавный доводчик прогресса до [target]; по умолчанию — доводка после
-  /// жеста, при смене вкладки вызывается с большей длительностью.
   void _animateSearchTo(
     double target, {
     Duration duration = const Duration(milliseconds: 220),
   }) {
-    if (_searchProgress == target) return;
-    _searchAnim?.stop();
-    _searchAnim?.dispose();
-    final ctrl = AnimationController(vsync: this, value: _searchProgress, duration: duration);
-    _searchAnim = ctrl;
-    final anim = CurvedAnimation(parent: ctrl, curve: Curves.easeOutCubic);
-    final tween = Tween(begin: _searchProgress, end: target);
-    ctrl.addListener(() {
-      if (mounted) setState(() => _searchProgress = tween.evaluate(anim));
-    });
-    ctrl.addStatusListener((s) {
-      if (s == AnimationStatus.completed) {
-        _searchAnim?.dispose();
-        _searchAnim = null;
-      }
-    });
-    ctrl.forward();
+    if (_searchProgress.value == target) return;
+    final ctrl = _searchAnim ??= AnimationController(vsync: this);
+    ctrl.duration = duration;
+    _searchTween = Tween(begin: _searchProgress.value, end: target);
+    ctrl
+      ..clearListeners()
+      ..addListener(_onSearchAnimTick)
+      ..forward(from: 0);
+  }
+
+  void _onSearchAnimTick() {
+    final t = _searchTween;
+    if (t == null || _searchAnim == null) return;
+    final curved = Curves.easeOutCubic.transform(_searchAnim!.value);
+    _searchProgress.value = t.begin! + (t.end! - t.begin!) * curved;
   }
 
   void _onUserTap(NgViewModel vm) {
@@ -396,7 +343,6 @@ class _HubScreenState extends State<HubScreen>
   }
 }
 
-// ─── Сайдбар жанров (`ul.sideNav` из левой колонки 2015) ──────────────────
 
 class _GenreSidebar extends StatefulWidget {
   final VoidCallback onClose;
@@ -407,7 +353,6 @@ class _GenreSidebar extends StatefulWidget {
 }
 
 class _GenreSidebarState extends State<_GenreSidebar> {
-  /// Раскрытая группа (аккордеон). null — все свёрнуты.
   String? _expanded;
 
   @override
@@ -416,23 +361,22 @@ class _GenreSidebarState extends State<_GenreSidebar> {
     final activeGenre = vm.genre?.id;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(right: BorderSide(color: ngHairline)),
       ),
       child: Column(
         children: [
-          // Шапка меню с кнопкой закрытия.
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: ngBlack,
               border: Border(bottom: BorderSide(color: ngHairline)),
             ),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'BROWSE AUDIO',
                     style: TextStyle(
@@ -460,7 +404,6 @@ class _GenreSidebarState extends State<_GenreSidebar> {
                   bold: true,
                   active: activeGenre == null,
                   onTap: () {
-                    // Снять фильтр — вернуть вкладке исходный список.
                     vm.setGenre(null);
                     widget.onClose();
                   },
@@ -482,7 +425,6 @@ class _GenreSidebarState extends State<_GenreSidebar> {
                         indent: true,
                         active: activeGenre == sub.id,
                         onTap: () {
-                          // Фильтр применяется к активной вкладке.
                           vm.setGenre(sub);
                           widget.onClose();
                         },
@@ -497,7 +439,6 @@ class _GenreSidebarState extends State<_GenreSidebar> {
   }
 }
 
-/// Пункт сайдбара: золотая ссылка на чёрном, при активе — подсвечена.
 class _SideLink extends StatelessWidget {
   final String label;
   final bool bold;
@@ -567,7 +508,6 @@ class _SideLink extends StatelessWidget {
   }
 }
 
-// ─── Открытие плеера ─────────────────────────────────────────────────────────
 
 void _openPlayer(BuildContext context) {
   Navigator.push(
@@ -586,7 +526,6 @@ void _openPlayer(BuildContext context) {
   );
 }
 
-// ─── Под с треками (состояние живёт между свайпами) ───────────────────────────
 
 class _TabPage extends StatefulWidget {
   final NgTab tab;
@@ -658,14 +597,17 @@ class _TabPageState extends State<_TabPage> with AutomaticKeepAliveClientMixin {
         itemCount: s.tracks.length + (s.isLoadingMore ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i >= s.tracks.length) return const NgLoading(width: 100);
-          return _TrackRow(track: s.tracks[i], index: i);
+          return _TrackRow(
+            track: s.tracks[i],
+            index: i,
+            queue: s.tracks,
+          );
         },
       );
     }
 
     return NgPod.fill(
       icon: widget.icon,
-      // При активном фильтре подписываем жанр — видно, что отфильтровано.
       title: vm.genre == null
           ? widget.title
           : '${widget.title} — ${vm.genre!.label}',
@@ -681,7 +623,6 @@ class _TabPageState extends State<_TabPage> with AutomaticKeepAliveClientMixin {
   }
 }
 
-// ─── Под с результатами поиска ────────────────────────────────────────────────
 
 class _SearchResults extends StatefulWidget {
   final NgViewModel vm;
@@ -731,7 +672,11 @@ class _SearchResultsState extends State<_SearchResults> {
         itemCount: vm.searchResults.length + (vm.isSearching ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i >= vm.searchResults.length) return const NgLoading(width: 100);
-          return _TrackRow(track: vm.searchResults[i], index: i);
+          return _TrackRow(
+            track: vm.searchResults[i],
+            index: i,
+            queue: vm.searchResults,
+          );
         },
       );
     }
@@ -745,12 +690,13 @@ class _SearchResultsState extends State<_SearchResults> {
   }
 }
 
-// ─── Строка `table.audiolist tr` ──────────────────────────────────────────────
 
 class _TrackRow extends StatelessWidget {
   final Track track;
   final int index;
-  const _TrackRow({required this.track, required this.index});
+
+  final List<Track> queue;
+  const _TrackRow({required this.track, required this.index, required this.queue});
 
   @override
   Widget build(BuildContext context) {
@@ -766,9 +712,10 @@ class _TrackRow extends StatelessWidget {
       artist: track.artist,
       playing: isActive,
       paused: isActive && !vm.isPlaying,
+      onIconTap: () =>
+          isActive ? vm.togglePlayPause() : vm.playTrack(track),
       onTap: () {
-        // Играем в пределах текущего списка (таб или поиск) — очередь артиста сбрасываем.
-        vm.setQueueContext(null);
+        vm.setQueueContext(queue);
         vm.playTrack(track);
         _openPlayer(context);
       },
@@ -797,7 +744,6 @@ class _TrackRow extends StatelessWidget {
   }
 }
 
-// ─── Иконки действий (избранное + плейлист) ───────────────────────────────────
 
 class _TrackActions extends StatelessWidget {
   final Track track;
@@ -829,42 +775,27 @@ class _TrackActions extends StatelessWidget {
 
   Future<void> _onFavTap(
       BuildContext context, NgViewModel vm, LibraryViewModel lvm) async {
-    if (vm.currentUser == null) {
-      final doLogin = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: ngPodBg,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(2)),
-            side: BorderSide(color: ngPodBorder, width: 4),
-          ),
-          title: const Text('Login Required', style: ngH2),
-          content: const Text('Log in to save favorites.', style: ngBody),
-          actionsPadding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
-          actions: [
-            NgButton(
-              label: 'Cancel',
-              width: 90,
-              onPressed: () => Navigator.pop(context, false),
-            ),
-            NgButton(
-              label: 'Login',
-              icon: 'key',
-              width: 96,
-              onPressed: () => Navigator.pop(context, true),
-            ),
-          ],
-        ),
-      );
-      if (doLogin == true && context.mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-        if (context.mounted) await vm.fetchUser();
-      }
-      return;
+    final toNg = await lvm.favGoesToNg();
+    final ok = await lvm.toggleFavorite(track);
+    if (!context.mounted) return;
+    if (!ok) {
+      final error = lvm.lastError;
+      lvm.clearError();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error ?? 'Failed to save favorite',
+            style: TextStyle(color: ngWhite, fontSize: 12)),
+        backgroundColor: ngRed,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ));
+    } else if (!toNg) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Saved to local favorites',
+            style: TextStyle(color: ngWhite, fontSize: 12)),
+        backgroundColor: ngOrange,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ));
     }
-    await lvm.toggleFavorite(track);
   }
 }

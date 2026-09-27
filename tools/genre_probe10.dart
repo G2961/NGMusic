@@ -1,5 +1,3 @@
-// Разведка v27: правильные ID поджанров — из мобильного меню /audio
-// (data-open-menu) + inner=1 фильтры. Запуск: dart run tools/genre_probe10.dart
 import 'package:http/http.dart' as http;
 
 const ua =
@@ -10,13 +8,10 @@ Future<void> main() async {
       headers: {'User-Agent': ua});
   final b = r.body;
 
-  // Меню-подменю:submenu идёт после mobile-menu. Ищем все submenu-блоки.
-  // Структура: <ul id="submenu-24"> или class с поджанрами.
   for (final m in RegExp(r'id="submenu-\d+"').allMatches(b).take(8)) {
     print('MENU: ${m.group(0)}');
   }
 
-  // Поджанры: все audio/browse/genre/<slug> ссылки из всей страницы.
   final slugs = <String>{};
   for (final m
       in RegExp(r'/audio/browse/genre/([a-z0-9-]+)').allMatches(b)) {

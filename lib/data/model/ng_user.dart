@@ -10,12 +10,6 @@ class NgUser {
   final String? exp;
   final String? fans;
   final String? audioCount;
-  /// Подписан ли текущий пользователь на этого автора — по классу `active`
-  /// на `.favefollow-buttons`.
-  ///
-  /// `null` — определить нельзя: кнопки на странице нет (гость) либо разметка
-  /// не совпала. Именно поэтому тип nullable: раньше здесь был `bool` с
-  /// дефолтом `false`, и UI не мог отличить «не подписан» от «не знаю».
   final bool? isFollowing;
 
   const NgUser({

@@ -22,7 +22,6 @@ SRC = sys.argv[1] if len(sys.argv) > 1 else \
 DST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                    "assets", "ng2015")
 
-# ── спрайт h2-all.png: 31x1519, 49 плиток 31x31 (иконки заголовков подов) ──────
 H2 = {
     1: "info",     2: "user",    3: "users",    4: "gear",     5: "link",
     8: "gamepad",  9: "film",   10: "audio",   11: "palette", 12: "quill",
@@ -33,7 +32,6 @@ H2 = {
     41: "upload", 42: "search", 43: "power",   44: "check",
 }
 
-# ── спрайт a-15yellows.png: 615x30, 41 плитка 15x15; ряд 0 — жёлтый, ряд 1 — тёмный
 A15 = {
     2: "arrow-left",  3: "arrow-right", 4: "add",        5: "trash",
     11: "save",      14: "expand",     15: "collapse",  16: "fav-on",
@@ -43,7 +41,6 @@ A15 = {
     39: "key",       40: "menu",
 }
 
-# ── простое копирование/конвертация текстур: (источник, приёмник) ──────────────
 TEX = [
     ("bg-skins/podtops/podtop-gold.jpg",  "tex/podtop-gold.jpg"),
     ("bg-skins/podtops/podtop-green.jpg", "tex/podtop-green.jpg"),
@@ -59,7 +56,6 @@ TEX = [
     ("defaults/icon-audio-smallest.png",  "icon-audio-default.png"),
 ]
 
-# gif/индексированные → png (Flutter корректнее ест png)
 TEX_PNG = [
     ("bg-skins/gold2-body.gif",  "tex/body-gold.png"),
     ("bg-skins/green2-body.gif", "tex/body-green.png"),
@@ -105,38 +101,32 @@ def main():
         Image.open(p).convert("RGBA").save(out(b))
         n += 1
 
-    # иконки заголовков подов
     sprite = Image.open(src("icons/h2-all.png")).convert("RGBA")
     for idx, name in H2.items():
         cut(sprite, (0, idx * 31, 31, idx * 31 + 31), f"h2/{name}.png")
         n += 1
 
-    # мелкие иконки действий, два состояния
     sprite = Image.open(src("icons/a-15yellows.png")).convert("RGBA")
     for idx, name in A15.items():
         cut(sprite, (idx * 15, 0, idx * 15 + 15, 15), f"a15/{name}.png")
         cut(sprite, (idx * 15, 15, idx * 15 + 15, 30), f"a15/{name}-dark.png")
         n += 2
 
-    # полоски-плашки для ссылок в шапке пода (More Audio »)
     sprite = Image.open(src("misc/link_stripes2.png")).convert("RGBA")
     cut(sprite, (0, 0, 300, 27), "tex/link-plate.png")
     cut(sprite, (300, 0, 600, 27), "tex/link-plate-hover.png")
     n += 2
 
-    # кнопки: 2 колонки x 3 ряда по 66x25 (обычная / наведение / выключенная)
     sprite = Image.open(src("bg-skins/buttons/button-gold.gif")).convert("RGBA")
     for row, name in enumerate(["normal", "hover", "disabled"]):
         cut(sprite, (0, row * 25, 66, row * 25 + 25), f"tex/button-{name}.png")
         n += 1
 
-    # звёзды рейтинга: 5 штук в полосе 87x15, пустая и заполненная
     sprite = Image.open(src("misc/vp-Stars.png")).convert("RGBA")
     cut(sprite, (0, 0, 87, 15), "stars-empty.png")
     cut(sprite, (0, 15, 87, 30), "stars-full.png")
     n += 2
 
-    # лупа поиска: 4 скина по 25px, берём золотой
     sprite = Image.open(src("bg-header/search.png")).convert("RGBA")
     cut(sprite, (0, 0, 25, 25), "a15/magnifier.png")
     n += 1

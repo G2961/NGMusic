@@ -1,6 +1,3 @@
-// Разведка: как выглядит СВОЙ отзыв на странице отзывов и какими
-// эндпоинтами он редактируется/удаляется.
-// Запуск: dart run tools/review_probe2.dart
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -20,7 +17,6 @@ Future<void> main() async {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
-  // 1. Список СВОИХ отзывов на странице профиля.
   final mine = await http.get(
       Uri.parse('https://g2961.newgrounds.com/reviews/audio'),
       headers: headers(cookie));
@@ -32,7 +28,6 @@ Future<void> main() async {
     print('  ${m.group(0)}');
   }
 
-  // Первый трек из своих отзывов.
   final trackId =
       RegExp(r'/reviews/portal/(\d+)/').firstMatch(mine.body)?.group(1) ??
           RegExp(r'/audio/listen/(\d+)').firstMatch(mine.body)?.group(1);
@@ -42,7 +37,6 @@ Future<void> main() async {
   }
   print('trackId=$trackId');
 
-  // 2. Страница отзывов трека с кукой: ищем СВОЮ карточку и её формы.
   final page = await http.get(
       Uri.parse('https://www.newgrounds.com/reviews/portal/$trackId/3/date/1'),
       headers: headers(cookie));
@@ -61,12 +55,10 @@ Future<void> main() async {
     final isMine = block.contains('g2961');
     print('card#$i id=${cards[i].group(1)} mine=$isMine len=${block.length}');
     if (isMine) {
-      // Печатаем блок целиком, вычищая переводы строк.
       print(block.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' '));
     }
   }
 
-  // 3. Ищем во всей странице слова edit/delete рядом с reviews.
   for (final m in RegExp(
           r'<form[^>]*action="[^"]*review[^"]*"[^>]*>|/reviews/[a-z_]+/\d+[^"\x27 ]*',
           caseSensitive: false)

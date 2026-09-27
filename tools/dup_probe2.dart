@@ -1,5 +1,3 @@
-// Разведка v39: размер страницы у каждого эндпоинта хаба.
-// Запуск: dart run tools/dup_probe2.dart
 import 'package:http/http.dart' as http;
 
 const ua =

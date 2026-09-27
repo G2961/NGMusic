@@ -1,5 +1,3 @@
-// Диагностика: сравниваем ответ Newgrounds для разных наборов заголовков.
-// Запуск: dart run tools/http_probe.dart
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -23,17 +21,14 @@ Future<void> probe(String name, Map<String, String> headers) async {
 }
 
 Future<void> main() async {
-  // 1. Как сейчас в приложении (_connect).
   await probe('app-current', {
     'User-Agent': ua,
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   });
 
-  // 2. Совсем без заголовков (дефолт Dart).
   await probe('bare', const {});
 
-  // 3. Полный набор «как Chrome».
   await probe('chrome-like', {
     'User-Agent': ua,
     'Accept':
@@ -52,7 +47,6 @@ Future<void> main() async {
     'Pragma': 'no-cache',
   });
 
-  // 4. Через HttpClient напрямую (тот же TLS, но без пакета http).
   try {
     final client = HttpClient();
     final req = await client.getUrl(Uri.parse(url));

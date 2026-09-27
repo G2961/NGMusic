@@ -11,15 +11,10 @@ import 'artist_audio_screen.dart';
 import 'artist_track_row.dart';
 import 'login_screen.dart';
 
-/// Аудио-портал 2015 носил зелёный скин (`body.green`).
 const _skin = NgSkin.gold;
 
-/// Сколько строк аудио показывать на самой странице автора.
-/// В 2015 профиль показывал короткую выжимку, а не весь портфолио.
 const _kAudioPreview = 8;
 
-/// Страница автора в вёрстке Newgrounds 2015: под с аватаром и статистикой,
-/// под со списком треков. Без Material-карточек и скруглений.
 class ArtistScreen extends StatefulWidget {
   final String artist;
   const ArtistScreen({super.key, required this.artist});
@@ -37,10 +32,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
   bool _loadingTracks = true;
   String? _error;
 
-  /// На NG есть ещё страницы аудио — значит, полный список имеет смысл.
   bool _hasMore = false;
 
-  /// Состояние подписки: null — ещё не известно (кнопка ждёт, а не врёт).
   bool? _isFollowing;
   bool _followBusy = false;
 
@@ -52,17 +45,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _loadProfile() async {
-    // Профиль и статус подписки читаются одним запросом: getUserProfile
-    // сам шлёт сессионные куки и разбирает кнопку favefollow. Отдельный
-    // getFollowStatus нужен только после входа из этого же экрана.
     try {
       final profile = await _repo.getUserProfile(widget.artist);
       if (!mounted) return;
       setState(() {
         _profile = profile;
         _loadingProfile = false;
-        // null — статус неизвестен (гость либо разметка не совпала),
-        // и кнопка не переключается в «Following» сама собой.
         _isFollowing = profile?.isFollowing;
       });
     } catch (_) {
@@ -77,8 +65,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
       if (!mounted) return;
       setState(() {
         _tracks = tracks;
-        // Первая страница отдаёт ~30 записей; «есть ещё» — либо ссылка
-        // load_more, либо просто больше строк, чем влезает в выжимку.
         _hasMore = nextUrl != null || tracks.length > _kAudioPreview;
         _loadingTracks = false;
       });
@@ -123,7 +109,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  // ── Под профиля ─────────────────────────────────────────────────────────────
 
   Widget _profilePod({required bool isSelf}) {
     final p = _profile;
@@ -149,11 +134,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Аватар в рамке ngBrown — как `.item-icon` в разметке 2015.
               Container(
                 width: 70,
                 height: 70,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: ngBlack,
                   border: Border.fromBorderSide(
                       BorderSide(color: ngBrown, width: 2)),
@@ -170,7 +154,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Ник золотым, как ссылки NG.
                     Text(
                       widget.artist,
                       style: ngLink.copyWith(fontSize: 17),
@@ -257,7 +240,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  // ── Под треков ──────────────────────────────────────────────────────────────
 
   Widget _tracksPod() {
     final preview = _tracks.length > _kAudioPreview
@@ -298,8 +280,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
               allTracks: preview,
               skin: _skin,
             ),
-          // Строка-«ещё» в духе `.pagenav`: остаток списка живёт на своём
-          // экране с догрузкой по скроллу.
           if (_hasMore)
             NgListRow(
               index: preview.length,
@@ -328,8 +308,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
       icon: 'audio',
       title: 'Audio',
       skin: _skin,
-      // Плашка в углу шапки только когда ей есть куда вести: раньше здесь
-      // висел неклик*абельный ярлык с числом треков и выглядел как кнопка.
       action: _hasMore
           ? NgPlateLink(label: 'View All »', onTap: _openAllAudio)
           : null,
@@ -351,7 +329,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   void _snack(String text, {bool ok = true}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text, style: const TextStyle(color: ngWhite, fontSize: 12)),
+      content: Text(text, style: TextStyle(color: ngWhite, fontSize: 12)),
       backgroundColor: ok ? ngOrange : ngRed,
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(),
@@ -360,7 +338,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 }
 
-// ─── Шапка ────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   final String artist;
@@ -370,7 +347,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border(bottom: BorderSide(color: ngHairline)),
       ),

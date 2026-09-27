@@ -1,4 +1,3 @@
-// Одноразовый скрипт: распаковывает MHTML-снимки 2024 в build/ng2024_unpack.
 import 'dart:convert';
 import 'dart:io';
 
@@ -30,7 +29,6 @@ void main() {
     var count = 0;
     for (final part in parts) {
       if (part.trim() == '--' || part.isEmpty) continue;
-      // Заголовки части до пустой строки.
       final headerEnd = part.indexOf(RegExp(r'(\r\n|\n)\s*(\r\n|\n)'));
       if (headerEnd < 0) continue;
       var headers = part.substring(0, headerEnd);
@@ -56,7 +54,6 @@ void main() {
       if (loc == null) continue;
       var bytes;
       if (enc == 'base64') {
-        // Убираем переносы.
         final b64 = body.replaceAll(RegExp(r'\s+'), '');
         try {
           bytes = base64Decode(b64);
@@ -67,7 +64,6 @@ void main() {
         bytes = utf8.encode(body);
       }
 
-      // Имя файла из URL: последний сегмент пути + hash.
       final uri = Uri.tryParse(loc);
       var fname = (uri?.pathSegments.isNotEmpty ?? false)
           ? uri!.pathSegments.last
@@ -77,7 +73,6 @@ void main() {
           !fname.contains('.')) {
         fname = '$fname.html';
       }
-      // Дедуп имён.
       var target = File('${out.path}/$fname');
       var n = 1;
       while (target.existsSync()) {

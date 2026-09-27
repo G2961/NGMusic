@@ -1,6 +1,3 @@
-// Разведка v40: featured/popular живут по своим правилам — сверяем пересечение
-// соседних страниц у featured (там может быть рейтинг-карусель).
-// Запуск: dart run tools/dup_probe3.dart
 import 'package:http/http.dart' as http;
 
 const ua =

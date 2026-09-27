@@ -1,5 +1,3 @@
-// Разведка v6: куда ведёт /reviews/edit/{id} — GET формы правки и её поля.
-// Запуск: dart run tools/review_probe6.dart [reviewId]
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -37,7 +35,6 @@ Future<void> main(List<String> args) async {
       .allMatches(form.group(0)!)) {
     print('  ${m.group(0)!.replaceAll('\n', ' ')}');
   }
-  // Фрагмент звёзд в форме (выбранный score).
   final star = RegExp(r'checked[^>]*|vote[^<>]{0,80}checked').allMatches(form.group(0)!);
   for (final m in star.take(5)) {
     print('STAR: ${m.group(0)}');

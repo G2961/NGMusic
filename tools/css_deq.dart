@@ -1,4 +1,3 @@
-// Одноразовый: декодирует CSS 2024 из quoted-printable в читаемый вид.
 import 'dart:io';
 
 void main() {

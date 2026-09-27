@@ -35,7 +35,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Media3 background playback service -->
         <service
             android:name=".player.PlaybackService"
             android:exported="true"
@@ -48,6 +47,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <meta-data
+            android:name="io.flutter.embedding.android.ImpellerBackend"
+            android:value="opengles"/>
     </application>
 
     <queries>

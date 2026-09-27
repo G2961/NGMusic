@@ -5,35 +5,23 @@ import 'package:flutter/material.dart';
 
 import '../theme/ng_theme.dart';
 
-/// Части флеш-плеера Newgrounds 2015 — блок `.ngp` из `render.js`.
-///
-///   .ngp          → [NgPlayerFrame]
-///   .ngp-viz      → [NgVizPanel]
-///   .ngp-bar      → [NgPlayerBar]
-///   .ngp-play     → [NgGlyphButton] (NgGlyph.play / NgGlyph.pause)
-///   .ngp-time     → [NgTimeLabel]
-///   .ngp-seek     → [NgSeekBar]
-///
-/// Все глифы рисуются вручную: в спрайте `a-15yellows.png` транспорта нет,
-/// а в CSS плеера они собраны из border/линейных градиентов цвета `#fc0`.
 
-// ── Глифы транспорта ──────────────────────────────────────────────────────────
 
 enum NgGlyph { play, pause, prev, next, shuffle, repeat, repeatOne, chevronDown }
 
 class NgGlyphIcon extends StatelessWidget {
   final NgGlyph glyph;
-  final Color color;
   final double size;
 
-  /// `.ngp-play { width:22px; height:24px }` — глиф чуть выше, чем шире.
-  const NgGlyphIcon(this.glyph, {super.key, this.color = ngPlayerYellow, this.size = 22});
+  const NgGlyphIcon(this.glyph, {super.key, this.color, this.size = 22});
+
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: Size(size, size),
-      painter: _GlyphPainter(glyph, color),
+      painter: _GlyphPainter(glyph, color ?? ngPlayerYellow),
     );
   }
 }
@@ -65,11 +53,9 @@ class _GlyphPainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTRB(l * w, t * h, r * w, b * h), fill);
 
     switch (glyph) {
-      // border-left:16px solid #fc0 + прозрачные 11px сверху/снизу
       case NgGlyph.play:
         canvas.drawPath(tri(0.18, 0.04, 0.18, 0.96, 0.90, 0.50), fill);
 
-      // .playing: две полосы по 5px из 14px ширины
       case NgGlyph.pause:
         rect(0.16, 0.04, 0.42, 0.96);
         rect(0.58, 0.04, 0.84, 0.96);
@@ -97,7 +83,6 @@ class _GlyphPainter extends CustomPainter {
           ),
           stroke,
         );
-        // «клюв» потока в правой стенке
         canvas.drawPath(tri(0.68, 0.34, 0.98, 0.34, 0.83, 0.62), fill);
         if (glyph == NgGlyph.repeatOne) {
           final tp = TextPainter(
@@ -125,7 +110,6 @@ class _GlyphPainter extends CustomPainter {
     }
   }
 
-  /// Линия со стрелкой на конце; координаты нормированы 0..1.
   void _arrow(Canvas canvas, Size size, Paint stroke, Paint fill, Offset from,
       Offset to) {
     Offset px(Offset o) => Offset(o.dx * size.width, o.dy * size.height);
@@ -156,17 +140,13 @@ class _GlyphPainter extends CustomPainter {
       old.glyph != glyph || old.color != color;
 }
 
-/// Кнопка транспорта: глиф `#fc0`, белый при нажатии (`.ngp-play:hover`),
-/// серый когда выключена или неактивна.
 class NgGlyphButton extends StatefulWidget {
   final NgGlyph glyph;
   final VoidCallback? onTap;
   final double glyphSize;
 
-  /// Размер области нажатия — на телефоне глиф маленький, палец большой.
   final double hitSize;
 
-  /// Для режимных кнопок (shuffle/repeat): выключенный режим — серый глиф.
   final bool active;
   final String? tooltip;
 
@@ -219,9 +199,7 @@ class _NgGlyphButtonState extends State<NgGlyphButton> {
   }
 }
 
-// ── Корпус плеера ─────────────────────────────────────────────────────────────
 
-/// `.ngp { background:#000; border:1px solid #2a2724; border-radius:2px }`
 class NgPlayerFrame extends StatelessWidget {
   final List<Widget> children;
   final EdgeInsets margin;
@@ -236,7 +214,7 @@ class NgPlayerFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: margin,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: Color(0xFF2A2724))),
         borderRadius: BorderRadius.all(Radius.circular(2)),
@@ -247,8 +225,6 @@ class NgPlayerFrame extends StatelessWidget {
   }
 }
 
-/// `.ngp-bar { height:44px; background:linear-gradient(#242220,#141210);
-/// border-top:1px solid #000; gap:10px; padding:0 12px }`
 class NgPlayerBar extends StatelessWidget {
   final List<Widget> children;
   final double height;
@@ -271,13 +247,13 @@ class NgPlayerBar extends StatelessWidget {
       height: height,
       padding: padding,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [ngPlayerBarTop, ngPlayerBarBot],
         ),
         border: topBorder
-            ? const Border(top: BorderSide(color: ngBlack))
+            ? Border(top: BorderSide(color: ngBlack))
             : null,
       ),
       child: Row(mainAxisAlignment: alignment, children: children),
@@ -285,7 +261,6 @@ class NgPlayerBar extends StatelessWidget {
   }
 }
 
-/// `.ngp-time { color:#fc0 }`, текущая позиция — белая (`.ngp-cur`).
 class NgTimeLabel extends StatelessWidget {
   final Duration position;
   final Duration? duration;
@@ -317,7 +292,7 @@ class NgTimeLabel extends StatelessWidget {
         children: [
           TextSpan(
             text: fmt(position),
-            style: const TextStyle(color: ngWhite),
+            style: TextStyle(color: ngWhite),
           ),
           const TextSpan(text: ' / '),
           TextSpan(text: fmt(duration)),
@@ -327,16 +302,11 @@ class NgTimeLabel extends StatelessWidget {
   }
 }
 
-/// `.ngp-seek` + `.ngp-seek-fill`: полосатая заливка под 45°, тянется мышью.
-/// На телефоне бар высотой 14px, но зона нажатия расширена по вертикали.
 class NgSeekBar extends StatefulWidget {
-  /// 0..1, живая позиция.
   final double value;
 
-  /// Ушёл палец — отдаём долю 0..1.
   final ValueChanged<double>? onSeek;
 
-  /// Трек ещё грузится: полоски бегут вместо позиции.
   final bool loading;
   final double height;
 
@@ -411,7 +381,7 @@ class _NgSeekBarState extends State<NgSeekBar>
               ),
             )
           : NgStripedSeek(
-              value: _drag ?? widget.value,
+              value: _drag ?? widget.value.clamp(0.0, 1.0),
               height: widget.height,
               knob: _drag != null,
             );
@@ -426,7 +396,6 @@ class _NgSeekBarState extends State<NgSeekBar>
             enabled ? (d) => _set(d.localPosition.dx) : null,
         onHorizontalDragEnd: enabled ? (_) => _commit() : null,
         child: Padding(
-          // зона нажатия ~40px по вертикали, сам бар остаётся 14px
           padding: EdgeInsets.symmetric(vertical: (40 - widget.height) / 2),
           child: bar,
         ),
@@ -435,13 +404,11 @@ class _NgSeekBarState extends State<NgSeekBar>
   }
 }
 
-/// Сам полосатый бар без жестов: `.ngp-seek` с `.ngp-seek-fill` внутри.
 class NgStripedSeek extends StatelessWidget {
   final double value;
   final double height;
   final double phase;
 
-  /// Метка позиции при перетаскивании.
   final bool knob;
 
   const NgStripedSeek({
@@ -456,7 +423,7 @@ class NgStripedSeek extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngBlack,
         border: Border.fromBorderSide(BorderSide(color: ngSeekBorder)),
         borderRadius: BorderRadius.all(Radius.circular(2)),
@@ -477,7 +444,7 @@ class _SeekPainter extends CustomPainter {
   final bool knob;
   const _SeekPainter(this.value, this.phase, this.knob);
 
-  static const _band = 8.0; // ширина полосы из CSS
+  static const _band = 8.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -517,10 +484,7 @@ class _SeekPainter extends CustomPainter {
       old.value != value || old.phase != phase || old.knob != knob;
 }
 
-// ── Визуализатор ──────────────────────────────────────────────────────────────
 
-/// `.ngp-viz { radial-gradient(ellipse at 50% 40%, #241a2e, #14101c 55%, #0a0810) }`
-/// — тёмная «сцена» плеера: обложка по центру, столбики и подписи снизу.
 class NgVizPanel extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
@@ -534,7 +498,7 @@ class NgVizPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: RadialGradient(
           center: Alignment(0, -0.2),
           radius: 0.95,
@@ -547,8 +511,6 @@ class NgVizPanel extends StatelessWidget {
   }
 }
 
-/// Столбики визуализатора: прямоугольные, от жёлтого к оранжевому.
-/// Настоящего спектра у нас нет, поэтому это тот же «фейк», что в 2015 flash.
 class NgVizBars extends StatefulWidget {
   final bool active;
   final double height;
@@ -632,10 +594,6 @@ class _VizPainter extends CustomPainter {
   bool shouldRepaint(_VizPainter old) => old.t != t || old.active != active;
 }
 
-/// Обложка без рамок и свечений: тянется на весь выделенный ей квадрат.
-/// [urls] — кандидаты от лучшего качества к худшему (`_raw.png` → `_raw.jpg` →
-/// `_full.webp` → превью): каждый следующий подхватывается, если предыдущий
-/// отдал 404.
 class NgArtImage extends StatelessWidget {
   final List<String> urls;
 
@@ -654,15 +612,11 @@ class NgArtImage extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       errorWidget: (_, __, ___) => _cascade(urls, i + 1),
-      placeholder: (_, __) => const ColoredBox(color: ngPodBg),
+      placeholder: (_, __) => ColoredBox(color: ngPodBg),
     );
   }
 }
 
-/// Обложка в рамке 2015: квадрат, чёрная рамка 4px, золотая линия внутри.
-/// Обложка заливает всю площадь; [urls] — кандидаты от лучшего качества
-/// к худшему (`_raw.png` → `_raw.jpg` → `_full.webp` → превью): каждый следующий
-/// подхватывается, если предыдущий отдал 404.
 class NgArtFrame extends StatelessWidget {
   final List<String> urls;
   final double size;
@@ -674,14 +628,13 @@ class NgArtFrame extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: ngPodBg,
         border: Border.fromBorderSide(BorderSide(color: ngBlack, width: 4)),
         boxShadow: [BoxShadow(color: ngBlack, blurRadius: 12, offset: Offset(0, 4))],
       ),
       child: DecoratedBox(
-        // золотая линия внутри рамки, как у превью в `.itemdetails`
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border.fromBorderSide(BorderSide(color: ngBrown)),
         ),
         child: _cascade(0),
@@ -699,21 +652,13 @@ class NgArtFrame extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       errorWidget: (_, __, ___) => _cascade(i + 1),
-      placeholder: (_, __) => const ColoredBox(color: ngPodBg),
+      placeholder: (_, __) => ColoredBox(color: ngPodBg),
     );
   }
 }
 
-// ── Сцена плеера ──────────────────────────────────────────────────────────
 
-/// Компактный `.ngp`: бар со временем и сикбаром плюс бар транспорта.
-/// Обложка, название и автор живут в шапке пода и в Credits & Info —
-/// дублировать их внутри плеера незачем.
-///
-/// Данные приходят снаружи — виджет ничего не знает о вьюмодели, поэтому его
-/// можно поднять в тесте.
 class NgPlayerStage extends StatelessWidget {
-  /// Кандидаты обложки (см. `Track.artworkUrls`). Пустой список — без обложки.
   final List<String> artUrls;
 
   final bool playing;
@@ -723,7 +668,6 @@ class NgPlayerStage extends StatelessWidget {
 
   final bool shuffle;
 
-  /// 0 — выкл, 1 — весь список, 2 — один трек.
   final int repeat;
 
   final VoidCallback? onPlayPause;
@@ -733,8 +677,6 @@ class NgPlayerStage extends StatelessWidget {
   final VoidCallback? onRepeat;
   final ValueChanged<Duration>? onSeek;
 
-  /// Явная высота обложки (ландшафт: остаток высоты сцены); null — квадрат
-  /// по ширине сцены, как в портрете.
   final double? artHeight;
 
   const NgPlayerStage({
@@ -762,8 +704,6 @@ class NgPlayerStage extends StatelessWidget {
 
     return NgPlayerFrame(
       children: [
-        // Обложка во всю ширину блока, без свечений и рамок — рамку даёт сам `.ngp`.
-        // artHeight задаёт точную высоту: сцена не должна ни раздуваться, ни резаться.
         if (artUrls.isNotEmpty)
           artHeight != null
               ? SizedBox(
@@ -775,13 +715,11 @@ class NgPlayerStage extends StatelessWidget {
                   child: NgArtImage(urls: artUrls),
                 ),
 
-        // `.ngp-bar` — время и полосатый сикбар
         NgPlayerBar(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           topBorder: artUrls.isNotEmpty,
           children: [
             SizedBox(
-              // `.ngp-time { min-width:92px }`
               width: 92,
               child: NgTimeLabel(position: position, duration: duration),
             ),
@@ -799,7 +737,6 @@ class NgPlayerStage extends StatelessWidget {
           ],
         ),
 
-        // Весь транспорт в одном ряду, play по центру
         NgPlayerBar(
           height: 48,
           alignment: MainAxisAlignment.spaceEvenly,
@@ -843,4 +780,3 @@ class NgPlayerStage extends StatelessWidget {
     );
   }
 }
-

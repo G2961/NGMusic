@@ -6,8 +6,6 @@ class NgAuth {
   static const _usernameKey = 'ng_username';
   static const _channel = MethodChannel('ngmusic/cookies');
 
-  /// Reads the FULL native WebView cookie string for newgrounds.com,
-  /// including HttpOnly cookies (the real session cookie) that JS can't see.
   static Future<String> readNativeCookies(
       [String url = 'https://www.newgrounds.com']) async {
     try {
@@ -18,14 +16,12 @@ class NgAuth {
     }
   }
 
-  /// Clears all native WebView cookies (used on logout).
   static Future<void> clearNativeCookies() async {
     try {
       await _channel.invokeMethod('clearCookies');
     } catch (_) {}
   }
 
-  /// Returns stored cookie string
   static Future<String?> getCookie() async {
     final p = await SharedPreferences.getInstance();
     return p.getString(_cookieKey);
@@ -52,12 +48,6 @@ class NgAuth {
     await clearNativeCookies();
   }
 
-  /// Похоже ли строка на сессионные куки Newgrounds.
-  ///
-  /// ВАЖНО: по одним кукам НЕЛЬЗЯ отличить гостя от вошедшего: NG выдаёт
-  /// `newgrounds_session` уже анонимному посетителю. Признак входа — то, что
-  /// страница `/account/` отдала имя пользователя (см. `LoginScreen`), а не эта
-  /// проверка. Здесь — только грубая валидация сохранённой строки.
   static bool isRealSession(String? cookie) {
     if (cookie == null || cookie.isEmpty) return false;
     if (!cookie.contains('newgrounds_session')) return false;
@@ -70,18 +60,10 @@ class NgAuth {
     return isRealSession(c);
   }
 
-  // ── Локальное состояние отзывов/голосов ─────────────────────────────────
-  //
-  // NG после голосования УБИРАЕТ votebar со страницы трека, а свою карточку
-  // отзыва отдаёт только на `/audio/listen/{id}`. Чтобы в поде Reviews всегда
-  // было видно «твой голос» и «твой отзыв», держим их локально как кэш:
-  // источник истины — живая страница трека ([NgRepository.getMyReview]),
-  // кэш ускоряет отрисовку и хранит голос, который NG больше не показывает.
 
-  static const _votePrefix = 'ng_my_vote_'; // + trackId → '0'..'10' (звёзды*2)
-  static const _reviewPrefix = 'ng_my_review_'; // + trackId → JSON карточки
+  static const _votePrefix = 'ng_my_vote_';
+  static const _reviewPrefix = 'ng_my_review_';
 
-  /// Сохранённый голос в шкале NG: 0..10 полузвёзд (null — не голосовал).
   static Future<int?> getMyVote(String trackId) async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString('$_votePrefix$trackId');
@@ -89,7 +71,6 @@ class NgAuth {
     return (int.tryParse(raw) ?? 0).clamp(0, 10);
   }
 
-  /// [vote] — голос в шкале NG 0..10 (полузвёзды).
   static Future<void> saveMyVote(String trackId, int vote) async {
     final p = await SharedPreferences.getInstance();
     await p.setString('$_votePrefix$trackId', '${vote.clamp(0, 10)}');
@@ -100,13 +81,11 @@ class NgAuth {
     await p.remove('$_votePrefix$trackId');
   }
 
-  /// JSON отзыва: {id, body, vote}. [body]/[vote] — текущие значения.
   static Future<Map<String, dynamic>?> getMyReview(String trackId) async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString('$_reviewPrefix$trackId');
     if (raw == null) return null;
     try {
-      // Минимальный разбор без dart:convert-импорта: строку пишем сами.
       final id = RegExp(r'"id":"(\d+)"').firstMatch(raw)?.group(1);
       final vote = RegExp(r'"vote":(\d+)').firstMatch(raw)?.group(1);
       final bodyM = RegExp(r'"body":"((?:[^"\\]|\\.)*)"').firstMatch(raw);
