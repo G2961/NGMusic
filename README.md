@@ -65,3 +65,7 @@ lib/
 ## ❗IMPORTANT❗
 
 This app is unofficial and not affiliated with Newgrounds. All content rights belong to its authors and Newgrounds.
+
+## License
+
+Distributed under the [MIT License](LICENSE).
